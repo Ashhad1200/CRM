@@ -1,0 +1,304 @@
+// ── Sales Module Schema ─────────────────────────────────────────────────────────
+// Contacts, Accounts, Leads, Deals, Pipelines, Stages, Quotes
+
+// ── Contact ────────────────────────────────────────────────────────────────────
+
+model Contact {
+  id             String          @id @default(uuid()) @db.Uuid
+  tenantId       String          @map("tenant_id") @db.Uuid
+  firstName      String          @map("first_name") @db.VarChar(100)
+  lastName       String          @map("last_name") @db.VarChar(100)
+  emails         String[]        @default([]) @db.VarChar(255)
+  phones         String[]        @default([]) @db.VarChar(50)
+  company        String?         @db.VarChar(255)
+  jobTitle       String?         @map("job_title") @db.VarChar(200)
+  accountId      String?         @map("account_id") @db.Uuid
+  lifecycleStage LifecycleStage  @default(SUBSCRIBER) @map("lifecycle_stage")
+  tags           String[]        @default([])
+  ownerId        String?         @map("owner_id") @db.Uuid
+  teamId         String?         @map("team_id") @db.Uuid
+  source         String?         @db.VarChar(100)
+  avatarUrl      String?         @map("avatar_url") @db.VarChar(500)
+  address        Json?
+  socialProfiles Json?           @map("social_profiles")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  createdBy      String?         @map("created_by") @db.Uuid
+  updatedBy      String?         @map("updated_by") @db.Uuid
+  version        Int             @default(1)
+
+  account        Account?        @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  deals          DealContact[]
+  leads          Lead[]
+
+  @@index([tenantId])
+  @@index([tenantId, accountId])
+  @@index([tenantId, ownerId])
+  @@map("contacts")
+  @@schema("sales")
+}
+
+enum LifecycleStage {
+  SUBSCRIBER
+  LEAD
+  MQL
+  SQL
+  OPPORTUNITY
+  CUSTOMER
+  EVANGELIST
+
+  @@schema("sales")
+}
+
+// ── Account ────────────────────────────────────────────────────────────────────
+
+model Account {
+  id              String    @id @default(uuid()) @db.Uuid
+  tenantId        String    @map("tenant_id") @db.Uuid
+  name            String    @db.VarChar(255)
+  industry        String?   @db.VarChar(100)
+  size            String?   @db.VarChar(50)
+  website         String?   @db.VarChar(500)
+  phone           String?   @db.VarChar(50)
+  billingAddress  Json?     @map("billing_address")
+  shippingAddress Json?     @map("shipping_address")
+  parentAccountId String?   @map("parent_account_id") @db.Uuid
+  ownerId         String?   @map("owner_id") @db.Uuid
+  teamId          String?   @map("team_id") @db.Uuid
+  annualRevenue   Decimal?  @map("annual_revenue") @db.Decimal(15, 2)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  createdBy       String?   @map("created_by") @db.Uuid
+  updatedBy       String?   @map("updated_by") @db.Uuid
+  version         Int       @default(1)
+
+  parentAccount   Account?  @relation("AccountHierarchy", fields: [parentAccountId], references: [id], onDelete: SetNull)
+  childAccounts   Account[] @relation("AccountHierarchy")
+  contacts        Contact[]
+  deals           Deal[]
+
+  @@index([tenantId])
+  @@index([tenantId, ownerId])
+  @@map("accounts")
+  @@schema("sales")
+}
+
+// ── Lead ───────────────────────────────────────────────────────────────────────
+
+model Lead {
+  id                 String     @id @default(uuid()) @db.Uuid
+  tenantId           String     @map("tenant_id") @db.Uuid
+  firstName          String     @map("first_name") @db.VarChar(100)
+  lastName           String     @map("last_name") @db.VarChar(100)
+  email              String     @db.VarChar(255)
+  phone              String?    @db.VarChar(50)
+  company            String?    @db.VarChar(255)
+  jobTitle           String?    @map("job_title") @db.VarChar(200)
+  source             LeadSource
+  score              Int        @default(0)
+  status             LeadStatus @default(NEW)
+  assignedOwnerId    String?    @map("assigned_owner_id") @db.Uuid
+  convertedContactId String?    @map("converted_contact_id") @db.Uuid
+  convertedDealId    String?    @map("converted_deal_id") @db.Uuid
+  convertedAt        DateTime?  @map("converted_at")
+  notes              String?    @db.Text
+  createdAt          DateTime   @default(now()) @map("created_at")
+  updatedAt          DateTime   @updatedAt @map("updated_at")
+  createdBy          String?    @map("created_by") @db.Uuid
+  updatedBy          String?    @map("updated_by") @db.Uuid
+  version            Int        @default(1)
+
+  convertedContact   Contact?   @relation(fields: [convertedContactId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, assignedOwnerId])
+  @@map("leads")
+  @@schema("sales")
+}
+
+enum LeadSource {
+  WEB_FORM
+  LANDING_PAGE
+  EMAIL
+  SOCIAL
+  REFERRAL
+  COLD_CALL
+  TRADE_SHOW
+  PARTNER
+  API
+  OTHER
+
+  @@schema("sales")
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  UNQUALIFIED
+  CONVERTED
+
+  @@schema("sales")
+}
+
+// ── Pipeline ───────────────────────────────────────────────────────────────────
+
+model Pipeline {
+  id        String          @id @default(uuid()) @db.Uuid
+  tenantId  String          @map("tenant_id") @db.Uuid
+  name      String          @db.VarChar(100)
+  isDefault Boolean         @default(false) @map("is_default")
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+  createdBy String?         @map("created_by") @db.Uuid
+
+  stages    PipelineStage[]
+  deals     Deal[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("pipelines")
+  @@schema("sales")
+}
+
+// ── Pipeline Stage ─────────────────────────────────────────────────────────────
+
+model PipelineStage {
+  id          String   @id @default(uuid()) @db.Uuid
+  pipelineId  String   @map("pipeline_id") @db.Uuid
+  name        String   @db.VarChar(100)
+  order       Int
+  probability Int      @default(0)
+  color       String?  @db.VarChar(7)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  pipeline    Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  deals       Deal[]
+
+  @@unique([pipelineId, order])
+  @@unique([pipelineId, name])
+  @@map("pipeline_stages")
+  @@schema("sales")
+}
+
+// ── Deal ───────────────────────────────────────────────────────────────────────
+
+model Deal {
+  id                String     @id @default(uuid()) @db.Uuid
+  tenantId          String     @map("tenant_id") @db.Uuid
+  name              String     @db.VarChar(255)
+  pipelineId        String     @map("pipeline_id") @db.Uuid
+  stageId           String     @map("stage_id") @db.Uuid
+  value             Decimal    @default(0) @db.Decimal(15, 2)
+  currency          Currency   @default(USD)
+  probability       Int        @default(0)
+  weightedValue     Decimal    @default(0) @map("weighted_value") @db.Decimal(15, 2)
+  expectedCloseDate DateTime?  @map("expected_close_date") @db.Date
+  ownerId           String?    @map("owner_id") @db.Uuid
+  accountId         String?    @map("account_id") @db.Uuid
+  wonAt             DateTime?  @map("won_at")
+  lostAt            DateTime?  @map("lost_at")
+  lostReason        String?    @map("lost_reason") @db.VarChar(500)
+  lastActivityAt    DateTime?  @map("last_activity_at")
+  createdAt         DateTime   @default(now()) @map("created_at")
+  updatedAt         DateTime   @updatedAt @map("updated_at")
+  createdBy         String?    @map("created_by") @db.Uuid
+  updatedBy         String?    @map("updated_by") @db.Uuid
+  version           Int        @default(1)
+
+  pipeline          Pipeline   @relation(fields: [pipelineId], references: [id])
+  stage             PipelineStage @relation(fields: [stageId], references: [id])
+  account           Account?   @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  contacts          DealContact[]
+  quotes            Quote[]
+
+  @@index([tenantId])
+  @@index([tenantId, pipelineId, stageId])
+  @@index([tenantId, ownerId])
+  @@index([tenantId, accountId])
+  @@map("deals")
+  @@schema("sales")
+}
+
+// ── Deal ↔ Contact (M2M) ──────────────────────────────────────────────────────
+
+model DealContact {
+  id        String   @id @default(uuid()) @db.Uuid
+  dealId    String   @map("deal_id") @db.Uuid
+  contactId String   @map("contact_id") @db.Uuid
+  role      String?  @db.VarChar(100)
+  isPrimary Boolean  @default(false) @map("is_primary")
+
+  deal      Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([dealId, contactId])
+  @@map("deal_contacts")
+  @@schema("sales")
+}
+
+// ── Quote ──────────────────────────────────────────────────────────────────────
+
+model Quote {
+  id             String         @id @default(uuid()) @db.Uuid
+  tenantId       String         @map("tenant_id") @db.Uuid
+  dealId         String         @map("deal_id") @db.Uuid
+  quoteNumber    Int            @map("quote_number")
+  title          String?        @db.VarChar(255)
+  subtotal       Decimal        @default(0) @db.Decimal(15, 2)
+  taxAmount      Decimal        @default(0) @map("tax_amount") @db.Decimal(15, 2)
+  discountAmount Decimal        @default(0) @map("discount_amount") @db.Decimal(15, 2)
+  total          Decimal        @default(0) @db.Decimal(15, 2)
+  currency       Currency       @default(USD)
+  status         QuoteStatus    @default(DRAFT)
+  approvalStatus ApprovalStatus @default(PENDING) @map("approval_status")
+  validUntil     DateTime?      @map("valid_until") @db.Date
+  notes          String?        @db.Text
+  sentAt         DateTime?      @map("sent_at")
+  acceptedAt     DateTime?      @map("accepted_at")
+  rejectedAt     DateTime?      @map("rejected_at")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  createdBy      String?        @map("created_by") @db.Uuid
+  updatedBy      String?        @map("updated_by") @db.Uuid
+  version        Int            @default(1)
+
+  deal           Deal           @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  lines          QuoteLine[]
+
+  @@index([tenantId])
+  @@index([tenantId, dealId])
+  @@map("quotes")
+  @@schema("sales")
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+
+  @@schema("sales")
+}
+
+// ── Quote Line ─────────────────────────────────────────────────────────────────
+
+model QuoteLine {
+  id          String  @id @default(uuid()) @db.Uuid
+  quoteId     String  @map("quote_id") @db.Uuid
+  productId   String? @map("product_id") @db.Uuid
+  description String  @db.VarChar(500)
+  quantity    Decimal @default(1) @db.Decimal(10, 2)
+  unitPrice   Decimal @map("unit_price") @db.Decimal(15, 2)
+  discount    Decimal @default(0) @db.Decimal(5, 2)
+  taxRate     Decimal @default(0) @map("tax_rate") @db.Decimal(5, 2)
+  lineTotal   Decimal @default(0) @map("line_total") @db.Decimal(15, 2)
+
+  quote       Quote   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@map("quote_lines")
+  @@schema("sales")
+}

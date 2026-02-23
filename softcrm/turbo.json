@@ -1,0 +1,62 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["**/.env.*local"],
+  "globalEnv": ["NODE_ENV", "CI"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["src/**", "tsconfig.json", "package.json"],
+      "outputs": ["dist/**"],
+      "cache": true
+    },
+    "dev": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "dependsOn": ["^build"],
+      "inputs": ["src/**", "*.config.*", ".eslintrc.*"],
+      "cache": true
+    },
+    "lint:fix": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "inputs": ["src/**", "**/__tests__/**"],
+      "cache": true
+    },
+    "test:unit": {
+      "dependsOn": ["^build"],
+      "inputs": ["src/**", "**/__tests__/**"],
+      "cache": true
+    },
+    "test:integration": {
+      "dependsOn": ["^build"],
+      "inputs": ["src/**", "**/__tests__/**"],
+      "cache": false,
+      "env": ["DATABASE_URL", "REDIS_URL"]
+    },
+    "test:e2e": {
+      "dependsOn": ["build"],
+      "cache": false,
+      "env": ["DATABASE_URL", "REDIS_URL", "BASE_URL"]
+    },
+    "test:coverage": {
+      "dependsOn": ["^build"],
+      "inputs": ["src/**", "**/__tests__/**"],
+      "outputs": ["coverage/**"],
+      "cache": false
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "inputs": ["src/**", "tsconfig.json"],
+      "cache": true
+    },
+    "clean": {
+      "cache": false
+    }
+  }
+}

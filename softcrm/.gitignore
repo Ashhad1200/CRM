@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+*.tsbuildinfo
+
+# Turborepo
+.turbo/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Coverage
+coverage/
+
+# Prisma
+prisma/migrations/.migration_lock.toml
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Docker volumes (local)
+pgdata/
+redisdata/
+meilidata/
+miniodata/
+
+# Test output
+test-results/
+playwright-report/
+
+# Misc
+*.tgz
+.cache/

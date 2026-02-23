@@ -1,0 +1,135 @@
+// ── Communications Module Schema ────────────────────────────────────────────────
+// 2-way email sync, VoIP calling, email templates, and unified activity timeline.
+
+// ── Enums ──────────────────────────────────────────────────────────────────────
+
+enum ActivityType {
+  EMAIL
+  CALL
+  MEETING
+  NOTE
+  SMS
+
+  @@schema("comms")
+}
+
+enum ActivityDirection {
+  INBOUND
+  OUTBOUND
+
+  @@schema("comms")
+}
+
+enum EmailSyncProvider {
+  GMAIL
+  OUTLOOK
+
+  @@schema("comms")
+}
+
+enum EmailSyncStatus {
+  ACTIVE
+  PAUSED
+  ERROR
+  DISCONNECTED
+
+  @@schema("comms")
+}
+
+enum CallStatus {
+  INITIATED
+  RINGING
+  IN_PROGRESS
+  COMPLETED
+  NO_ANSWER
+  BUSY
+  FAILED
+  CANCELLED
+
+  @@schema("comms")
+}
+
+// ── Models ─────────────────────────────────────────────────────────────────────
+
+/// Unified activity record — every email, call, meeting, note, or SMS is an Activity.
+model Activity {
+  id          String            @id @default(uuid()) @db.Uuid
+  tenantId    String            @db.Uuid
+  type        ActivityType
+  direction   ActivityDirection
+  contactId   String?           @db.Uuid
+  dealId      String?           @db.Uuid
+  ticketId    String?           @db.Uuid
+  accountId   String?           @db.Uuid
+  subject     String?
+  body        String?           @db.Text
+  metadata    Json?
+  timestamp   DateTime          @default(now())
+  createdBy   String            @db.Uuid
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  callLog     CallLog?
+
+  @@index([tenantId, contactId, timestamp])
+  @@index([tenantId, dealId, timestamp])
+  @@index([tenantId, ticketId, timestamp])
+  @@index([tenantId, accountId, timestamp])
+  @@index([tenantId, timestamp])
+  @@schema("comms")
+}
+
+/// Per-user email sync configuration (Gmail / Outlook).
+model EmailSync {
+  id            String            @id @default(uuid()) @db.Uuid
+  tenantId      String            @db.Uuid
+  userId        String            @db.Uuid
+  provider      EmailSyncProvider
+  accessToken   String            @db.Text
+  refreshToken  String            @db.Text
+  lastSyncAt    DateTime?
+  status        EmailSyncStatus   @default(ACTIVE)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@unique([tenantId, userId, provider])
+  @@schema("comms")
+}
+
+/// Reusable email template with merge-field support.
+model EmailTemplate {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  name        String
+  subject     String
+  bodyHtml    String   @db.Text
+  mergeFields String[] @default([])
+  isActive    Boolean  @default(true)
+  createdBy   String   @db.Uuid
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  version     Int      @default(1)
+
+  @@unique([tenantId, name])
+  @@schema("comms")
+}
+
+/// Call log attached to an Activity of type CALL.
+model CallLog {
+  id          String     @id @default(uuid()) @db.Uuid
+  tenantId    String     @db.Uuid
+  activityId  String     @unique @db.Uuid
+  provider    String     @default("twilio")
+  callSid     String?
+  fromNumber  String
+  toNumber    String
+  duration    Int        @default(0) // seconds
+  recordingUrl String?
+  status      CallStatus @default(INITIATED)
+  createdAt   DateTime   @default(now())
+
+  activity    Activity   @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, callSid])
+  @@schema("comms")
+}

@@ -1,0 +1,56 @@
+{
+  "name": "softcrm",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SoftCRM — Enterprise CRM Platform (Modular Monolith)",
+  "author": "SoftCRM Team",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "dev:api": "pnpm --filter @softcrm/api dev",
+    "dev:web": "pnpm --filter @softcrm/web dev",
+    "lint": "turbo run lint",
+    "lint:fix": "turbo run lint:fix",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
+    "test": "turbo run test",
+    "test:unit": "turbo run test:unit",
+    "test:integration": "turbo run test:integration",
+    "test:e2e": "turbo run test:e2e",
+    "test:coverage": "turbo run test:coverage",
+    "typecheck": "turbo run typecheck",
+    "db:migrate": "pnpm --filter @softcrm/db migrate:dev",
+    "db:seed": "pnpm --filter @softcrm/db seed",
+    "db:studio": "pnpm --filter @softcrm/db studio",
+    "db:generate": "pnpm --filter @softcrm/db generate",
+    "generate:openapi": "tsx tools/scripts/generate-openapi.ts",
+    "clean": "turbo run clean && rimraf node_modules",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "eslint": "^9.17.0",
+    "husky": "^9.1.0",
+    "lint-staged": "^15.4.0",
+    "prettier": "^3.4.0",
+    "rimraf": "^6.0.0",
+    "turbo": "^2.3.0",
+    "typescript": "^5.7.0",
+    "zod-to-json-schema": "^3.25.1"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,css,yaml,yml}": [
+      "prettier --write"
+    ]
+  }
+}

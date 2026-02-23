@@ -1,0 +1,289 @@
+{
+  "apiVersion": 1,
+  "groups": [
+    {
+      "orgId": 1,
+      "name": "SoftCRM SLO Alerts",
+      "folder": "SoftCRM",
+      "interval": "1m",
+      "rules": [
+        {
+          "uid": "softcrm-p95-latency",
+          "title": "API p95 Latency > 200ms for 5 min",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "queryType": "",
+              "relativeTimeRange": { "from": 300, "to": 0 },
+              "datasourceUid": "${DS_PROMETHEUS}",
+              "model": {
+                "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"softcrm-api\"}[5m])) by (le))",
+                "refId": "A"
+              }
+            },
+            {
+              "refId": "B",
+              "queryType": "",
+              "relativeTimeRange": { "from": 300, "to": 0 },
+              "datasourceUid": "__expr__",
+              "model": {
+                "conditions": [
+                  {
+                    "evaluator": { "params": [0.2], "type": "gt" },
+                    "operator": { "type": "and" },
+                    "query": { "params": ["A"] },
+                    "reducer": { "params": [], "type": "last" },
+                    "type": "query"
+                  }
+                ],
+                "refId": "B",
+                "type": "classic_conditions"
+              }
+            }
+          ],
+          "for": "5m",
+          "labels": {
+            "severity": "critical",
+            "team": "platform"
+          },
+          "annotations": {
+            "summary": "API p95 latency exceeds 200ms SLO",
+            "description": "The p95 latency has been above 200ms for 5 minutes. Current value: {{ $value }}s",
+            "runbook_url": "https://docs.softcrm.dev/runbooks/high-latency"
+          },
+          "noDataState": "NoData",
+          "execErrState": "Error"
+        },
+        {
+          "uid": "softcrm-error-rate",
+          "title": "5xx Error Rate > 1% for 5 min",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": { "from": 300, "to": 0 },
+              "datasourceUid": "${DS_PROMETHEUS}",
+              "model": {
+                "expr": "sum(rate(http_requests_total{job=\"softcrm-api\", status=~\"5..\"}[5m])) / sum(rate(http_requests_total{job=\"softcrm-api\"}[5m]))",
+                "refId": "A"
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": { "from": 300, "to": 0 },
+              "datasourceUid": "__expr__",
+              "model": {
+                "conditions": [
+                  {
+                    "evaluator": { "params": [0.01], "type": "gt" },
+                    "operator": { "type": "and" },
+                    "query": { "params": ["A"] },
+                    "reducer": { "params": [], "type": "last" },
+                    "type": "query"
+                  }
+                ],
+                "refId": "B",
+                "type": "classic_conditions"
+              }
+            }
+          ],
+          "for": "5m",
+          "labels": {
+            "severity": "critical",
+            "team": "platform"
+          },
+          "annotations": {
+            "summary": "5xx error rate exceeds 1% SLO threshold",
+            "description": "Server error rate has been above 1% for 5 minutes. Current: {{ $value | humanizePercentage }}",
+            "runbook_url": "https://docs.softcrm.dev/runbooks/high-error-rate"
+          },
+          "noDataState": "NoData",
+          "execErrState": "Error"
+        },
+        {
+          "uid": "softcrm-db-latency",
+          "title": "DB Query p95 > 100ms for 5 min",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": { "from": 300, "to": 0 },
+              "datasourceUid": "${DS_PROMETHEUS}",
+              "model": {
+                "expr": "histogram_quantile(0.95, sum(rate(prisma_client_queries_duration_seconds_bucket{job=\"softcrm-api\"}[5m])) by (le))",
+                "refId": "A"
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": { "from": 300, "to": 0 },
+              "datasourceUid": "__expr__",
+              "model": {
+                "conditions": [
+                  {
+                    "evaluator": { "params": [0.1], "type": "gt" },
+                    "operator": { "type": "and" },
+                    "query": { "params": ["A"] },
+                    "reducer": { "params": [], "type": "last" },
+                    "type": "query"
+                  }
+                ],
+                "refId": "B",
+                "type": "classic_conditions"
+              }
+            }
+          ],
+          "for": "5m",
+          "labels": {
+            "severity": "warning",
+            "team": "platform"
+          },
+          "annotations": {
+            "summary": "Database query latency is elevated",
+            "description": "p95 DB query latency above 100ms for 5 min. Current: {{ $value }}s"
+          },
+          "noDataState": "NoData",
+          "execErrState": "Error"
+        },
+        {
+          "uid": "softcrm-redis-hit-rate",
+          "title": "Redis Cache Hit Rate < 80%",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": { "from": 600, "to": 0 },
+              "datasourceUid": "${DS_PROMETHEUS}",
+              "model": {
+                "expr": "redis_keyspace_hits_total{instance=~\".*softcrm.*\"} / (redis_keyspace_hits_total{instance=~\".*softcrm.*\"} + redis_keyspace_misses_total{instance=~\".*softcrm.*\"})",
+                "refId": "A"
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": { "from": 600, "to": 0 },
+              "datasourceUid": "__expr__",
+              "model": {
+                "conditions": [
+                  {
+                    "evaluator": { "params": [0.8], "type": "lt" },
+                    "operator": { "type": "and" },
+                    "query": { "params": ["A"] },
+                    "reducer": { "params": [], "type": "last" },
+                    "type": "query"
+                  }
+                ],
+                "refId": "B",
+                "type": "classic_conditions"
+              }
+            }
+          ],
+          "for": "10m",
+          "labels": {
+            "severity": "warning",
+            "team": "platform"
+          },
+          "annotations": {
+            "summary": "Redis cache hit rate is low",
+            "description": "Cache hit rate below 80% for 10 min. Current: {{ $value | humanizePercentage }}"
+          },
+          "noDataState": "NoData",
+          "execErrState": "Error"
+        },
+        {
+          "uid": "softcrm-bullmq-backlog",
+          "title": "BullMQ Queue Backlog > 1000",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": { "from": 300, "to": 0 },
+              "datasourceUid": "${DS_PROMETHEUS}",
+              "model": {
+                "expr": "sum(bull_queue_waiting{job=\"softcrm-api\"})",
+                "refId": "A"
+              }
+            },
+            {
+              "refId": "B",
+              "relativeTimeRange": { "from": 300, "to": 0 },
+              "datasourceUid": "__expr__",
+              "model": {
+                "conditions": [
+                  {
+                    "evaluator": { "params": [1000], "type": "gt" },
+                    "operator": { "type": "and" },
+                    "query": { "params": ["A"] },
+                    "reducer": { "params": [], "type": "last" },
+                    "type": "query"
+                  }
+                ],
+                "refId": "B",
+                "type": "classic_conditions"
+              }
+            }
+          ],
+          "for": "5m",
+          "labels": {
+            "severity": "warning",
+            "team": "platform"
+          },
+          "annotations": {
+            "summary": "BullMQ queue backlog is growing",
+            "description": "Total waiting jobs exceeded 1000 for 5 min. Current: {{ $value }}"
+          },
+          "noDataState": "NoData",
+          "execErrState": "Error"
+        }
+      ]
+    }
+  ],
+  "contactPoints": [
+    {
+      "orgId": 1,
+      "name": "PagerDuty — Platform",
+      "receivers": [
+        {
+          "uid": "pagerduty-platform",
+          "type": "pagerduty",
+          "settings": {
+            "integrationKey": "${PAGERDUTY_INTEGRATION_KEY}",
+            "severity": "critical"
+          }
+        }
+      ]
+    },
+    {
+      "orgId": 1,
+      "name": "Slack — Platform Alerts",
+      "receivers": [
+        {
+          "uid": "slack-platform",
+          "type": "slack",
+          "settings": {
+            "url": "${SLACK_WEBHOOK_URL}",
+            "recipient": "#platform-alerts",
+            "mentionChannel": "here"
+          }
+        }
+      ]
+    }
+  ],
+  "policies": [
+    {
+      "orgId": 1,
+      "receiver": "Slack — Platform Alerts",
+      "group_by": ["alertname"],
+      "routes": [
+        {
+          "receiver": "PagerDuty — Platform",
+          "matchers": ["severity=critical"],
+          "group_wait": "30s",
+          "group_interval": "5m",
+          "repeat_interval": "4h"
+        }
+      ]
+    }
+  ]
+}

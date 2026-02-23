@@ -1,0 +1,268 @@
+// ── Inventory Module Schema ──────────────────────────────────────────────────
+// Product catalog, price books, stock tracking, warehouses, sales orders,
+// purchase orders, and fulfillment with accounting integration.
+
+// ── Sales Order Status ──────────────────────────────────────────────────────────
+
+enum SalesOrderStatus {
+  DRAFT
+  CONFIRMED
+  PARTIALLY_FULFILLED
+  FULFILLED
+  CANCELLED
+
+  @@schema("inventory")
+}
+
+// ── Purchase Order Status ───────────────────────────────────────────────────────
+
+enum PurchaseOrderStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+
+  @@schema("inventory")
+}
+
+// ── Tax Class ───────────────────────────────────────────────────────────────────
+
+enum TaxClass {
+  STANDARD
+  REDUCED
+  ZERO
+  EXEMPT
+
+  @@schema("inventory")
+}
+
+// ── Stock Adjustment Reason ─────────────────────────────────────────────────────
+
+enum StockAdjustmentReason {
+  PURCHASE
+  SALE
+  RETURN
+  DAMAGE
+  CORRECTION
+  RESERVED
+  RELEASED
+
+  @@schema("inventory")
+}
+
+// ── Models ──────────────────────────────────────────────────────────────────────
+
+model Product {
+  id          String   @id @db.VarChar(30)
+  tenantId    String   @map("tenant_id") @db.VarChar(30)
+  sku         String   @db.VarChar(100)
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+  unitPrice   Decimal  @default(0) @map("unit_price") @db.Decimal(15, 2)
+  cost        Decimal  @default(0) @db.Decimal(15, 2)
+  taxClass    TaxClass @default(STANDARD) @map("tax_class")
+  categoryId  String?  @map("category_id") @db.VarChar(30)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdBy   String?  @map("created_by") @db.VarChar(30)
+  version     Int      @default(1)
+
+  // Relations
+  stockLevels    StockLevel[]
+  priceBookEntries PriceBookEntry[]
+  salesOrderLines  SalesOrderLine[]
+  purchaseOrderLines POLine[]
+
+  @@unique([tenantId, sku])
+  @@index([tenantId, isActive])
+  @@index([tenantId, name])
+  @@map("products")
+  @@schema("inventory")
+}
+
+model PriceBook {
+  id            String    @id @db.VarChar(30)
+  tenantId      String    @map("tenant_id") @db.VarChar(30)
+  name          String    @db.VarChar(255)
+  currency      Currency  @default(USD)
+  isDefault     Boolean   @default(false) @map("is_default")
+  effectiveFrom DateTime? @map("effective_from")
+  effectiveTo   DateTime? @map("effective_to")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  entries PriceBookEntry[]
+
+  @@index([tenantId, isDefault])
+  @@map("price_books")
+  @@schema("inventory")
+}
+
+model PriceBookEntry {
+  id          String  @id @db.VarChar(30)
+  tenantId    String  @map("tenant_id") @db.VarChar(30)
+  priceBookId String  @map("price_book_id") @db.VarChar(30)
+  productId   String  @map("product_id") @db.VarChar(30)
+  price       Decimal @db.Decimal(15, 2)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  priceBook PriceBook @relation(fields: [priceBookId], references: [id])
+  product   Product   @relation(fields: [productId], references: [id])
+
+  @@unique([priceBookId, productId])
+  @@index([tenantId])
+  @@map("price_book_entries")
+  @@schema("inventory")
+}
+
+model Warehouse {
+  id        String   @id @db.VarChar(30)
+  tenantId  String   @map("tenant_id") @db.VarChar(30)
+  name      String   @db.VarChar(255)
+  address   String?  @db.Text
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  stockLevels StockLevel[]
+
+  @@index([tenantId])
+  @@map("warehouses")
+  @@schema("inventory")
+}
+
+model StockLevel {
+  id          String   @id @db.VarChar(30)
+  tenantId    String   @map("tenant_id") @db.VarChar(30)
+  productId   String   @map("product_id") @db.VarChar(30)
+  warehouseId String   @map("warehouse_id") @db.VarChar(30)
+  quantity    Int      @default(0)
+  reservedQty Int      @default(0) @map("reserved_qty")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  product   Product   @relation(fields: [productId], references: [id])
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@unique([productId, warehouseId])
+  @@index([tenantId, productId])
+  @@map("stock_levels")
+  @@schema("inventory")
+}
+
+model SalesOrder {
+  id          String           @id @db.VarChar(30)
+  tenantId    String           @map("tenant_id") @db.VarChar(30)
+  orderNumber Int              @map("order_number")
+  dealId      String?          @map("deal_id") @db.VarChar(30)
+  contactId   String?          @map("contact_id") @db.VarChar(30)
+  accountId   String?          @map("account_id") @db.VarChar(30)
+  status      SalesOrderStatus @default(DRAFT)
+  notes       String?          @db.Text
+  subtotal    Decimal          @default(0) @db.Decimal(15, 2)
+  taxAmount   Decimal          @default(0) @map("tax_amount") @db.Decimal(15, 2)
+  total       Decimal          @default(0) @db.Decimal(15, 2)
+  fulfilledAt DateTime?        @map("fulfilled_at")
+  cancelledAt DateTime?        @map("cancelled_at")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  createdBy   String?          @map("created_by") @db.VarChar(30)
+  version     Int              @default(1)
+
+  // Relations
+  lines SalesOrderLine[]
+
+  @@unique([tenantId, orderNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, dealId])
+  @@map("sales_orders")
+  @@schema("inventory")
+}
+
+model SalesOrderLine {
+  id           String  @id @db.VarChar(30)
+  salesOrderId String  @map("sales_order_id") @db.VarChar(30)
+  productId    String  @map("product_id") @db.VarChar(30)
+  quantity     Int
+  unitPrice    Decimal @map("unit_price") @db.Decimal(15, 2)
+  lineTotal    Decimal @map("line_total") @db.Decimal(15, 2)
+  fulfilled    Boolean @default(false)
+
+  // Relations
+  salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id])
+  product    Product    @relation(fields: [productId], references: [id])
+
+  @@index([salesOrderId])
+  @@map("sales_order_lines")
+  @@schema("inventory")
+}
+
+model PurchaseOrder {
+  id             String              @id @db.VarChar(30)
+  tenantId       String              @map("tenant_id") @db.VarChar(30)
+  poNumber       Int                 @map("po_number")
+  vendorName     String              @map("vendor_name") @db.VarChar(255)
+  status         PurchaseOrderStatus @default(DRAFT)
+  approvalStatus ApprovalStatus      @default(PENDING) @map("approval_status")
+  notes          String?             @db.Text
+  subtotal       Decimal             @default(0) @db.Decimal(15, 2)
+  total          Decimal             @default(0) @db.Decimal(15, 2)
+  orderedAt      DateTime?           @map("ordered_at")
+  receivedAt     DateTime?           @map("received_at")
+  cancelledAt    DateTime?           @map("cancelled_at")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+  createdBy      String?             @map("created_by") @db.VarChar(30)
+  approvedBy     String?             @map("approved_by") @db.VarChar(30)
+  version        Int                 @default(1)
+
+  // Relations
+  lines POLine[]
+
+  @@unique([tenantId, poNumber])
+  @@index([tenantId, status])
+  @@map("purchase_orders")
+  @@schema("inventory")
+}
+
+model POLine {
+  id              String @id @db.VarChar(30)
+  purchaseOrderId String @map("purchase_order_id") @db.VarChar(30)
+  productId       String @map("product_id") @db.VarChar(30)
+  quantity        Int
+  unitCost        Decimal @map("unit_cost") @db.Decimal(15, 2)
+  lineTotal       Decimal @map("line_total") @db.Decimal(15, 2)
+  receivedQty     Int     @default(0) @map("received_qty")
+
+  // Relations
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  product       Product       @relation(fields: [productId], references: [id])
+
+  @@index([purchaseOrderId])
+  @@map("po_lines")
+  @@schema("inventory")
+}
+
+model StockAdjustment {
+  id          String               @id @db.VarChar(30)
+  tenantId    String               @map("tenant_id") @db.VarChar(30)
+  productId   String               @map("product_id") @db.VarChar(30)
+  warehouseId String               @map("warehouse_id") @db.VarChar(30)
+  quantity    Int
+  reason      StockAdjustmentReason
+  reference   String?              @db.VarChar(255)
+  createdAt   DateTime             @default(now()) @map("created_at")
+  createdBy   String?              @map("created_by") @db.VarChar(30)
+
+  @@index([tenantId, productId])
+  @@map("stock_adjustments")
+  @@schema("inventory")
+}

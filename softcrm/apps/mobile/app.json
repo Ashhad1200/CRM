@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "SoftCRM Mobile",
+    "slug": "softcrm-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1e40af"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.softcrm.mobile",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "SoftCRM needs your location for check-ins at client sites.",
+        "NSCameraUsageDescription": "SoftCRM uses the camera to scan receipts for expense tracking."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1e40af"
+      },
+      "package": "com.softcrm.mobile",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "CAMERA"
+      ]
+    },
+    "plugins": [
+      "expo-location",
+      "expo-camera",
+      "expo-secure-store"
+    ],
+    "extra": {
+      "apiBaseUrl": "http://localhost:3000/api/v1"
+    }
+  }
+}

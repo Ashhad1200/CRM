@@ -1,0 +1,53 @@
+{
+  "name": "@softcrm/db",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Prisma schema, migrations, and database client for SoftCRM",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./client": {
+      "import": "./dist/client.js",
+      "types": "./dist/client.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "dev": "tsc --project tsconfig.build.json --watch",
+    "lint": "eslint src/",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf dist",
+    "generate": "prisma generate --schema=prisma/schema",
+    "migrate:dev": "prisma migrate dev --schema=prisma/schema",
+    "migrate:deploy": "prisma migrate deploy --schema=prisma/schema",
+    "migrate:reset": "prisma migrate reset --schema=prisma/schema --force",
+    "studio": "prisma studio --schema=prisma/schema",
+    "seed": "tsx prisma/seed.ts",
+    "db:push": "prisma db push --schema=prisma/schema"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.0.0",
+    "@softcrm/shared-kernel": "workspace:*",
+    "bcryptjs": "^3.0.2"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^3.0.0",
+    "@types/node": "^20.17.0",
+    "prisma": "^6.0.0",
+    "rimraf": "^6.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "prisma": {
+    "schema": "prisma/schema"
+  }
+}

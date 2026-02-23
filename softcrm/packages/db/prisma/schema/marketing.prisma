@@ -1,0 +1,144 @@
+// ── Marketing Module Schema ──────────────────────────────────────────────────
+// Customer segmentation, email campaigns with A/B testing, engagement tracking,
+// and multi-touch revenue attribution.
+
+// ── Enums ──────────────────────────────────────────────────────────────────────
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  SENT
+  PAUSED
+  CANCELLED
+
+  @@schema("marketing")
+}
+
+enum CampaignType {
+  EMAIL
+  SMS
+  SOCIAL
+  EVENT
+
+  @@schema("marketing")
+}
+
+enum ABVariant {
+  A
+  B
+
+  @@schema("marketing")
+}
+
+enum TouchType {
+  FIRST
+  MID
+  LAST
+
+  @@schema("marketing")
+}
+
+// ── Models ─────────────────────────────────────────────────────────────────────
+
+/// Contact segment — dynamic (criteria-based) or static (manual membership).
+model Segment {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+  criteria    Json?
+  isDynamic   Boolean  @default(true)
+  memberCount Int      @default(0)
+  createdBy   String   @db.Uuid
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  campaigns   Campaign[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@schema("marketing")
+}
+
+/// Email campaign with optional A/B subject testing.
+model Campaign {
+  id          String         @id @default(uuid()) @db.Uuid
+  tenantId    String         @db.Uuid
+  name        String         @db.VarChar(255)
+  type        CampaignType   @default(EMAIL)
+  segmentId   String?        @db.Uuid
+  subjectA    String         @db.VarChar(500)
+  subjectB    String?        @db.VarChar(500)
+  bodyHtml    String         @db.Text
+  scheduledAt DateTime?
+  sentAt      DateTime?
+  status      CampaignStatus @default(DRAFT)
+  createdBy   String         @db.Uuid
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  segment    Segment?             @relation(fields: [segmentId], references: [id])
+  recipients CampaignRecipient[]
+  touches    MarketingTouch[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, segmentId])
+  @@schema("marketing")
+}
+
+/// Per-recipient engagement tracking for a campaign.
+model CampaignRecipient {
+  id             String    @id @default(uuid()) @db.Uuid
+  tenantId       String    @db.Uuid
+  campaignId     String    @db.Uuid
+  contactId      String    @db.Uuid
+  variant        ABVariant @default(A)
+  sentAt         DateTime?
+  deliveredAt    DateTime?
+  openedAt       DateTime?
+  clickedAt      DateTime?
+  bouncedAt      DateTime?
+  unsubscribedAt DateTime?
+  createdAt      DateTime  @default(now())
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, contactId])
+  @@index([tenantId, campaignId])
+  @@index([tenantId, contactId])
+  @@schema("marketing")
+}
+
+/// Multi-touch attribution record — links a campaign to a deal via a contact.
+model MarketingTouch {
+  id         String    @id @default(uuid()) @db.Uuid
+  tenantId   String    @db.Uuid
+  contactId  String    @db.Uuid
+  campaignId String    @db.Uuid
+  dealId     String?   @db.Uuid
+  touchType  TouchType
+  timestamp  DateTime  @default(now())
+  createdAt  DateTime  @default(now())
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, contactId])
+  @@index([tenantId, campaignId])
+  @@index([tenantId, dealId])
+  @@schema("marketing")
+}
+
+/// Global unsubscribe list — contacts who have opted out.
+model Unsubscribe {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  contactId String   @db.Uuid
+  source    String   @db.VarChar(100)
+  timestamp DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, contactId])
+  @@index([tenantId])
+  @@schema("marketing")
+}

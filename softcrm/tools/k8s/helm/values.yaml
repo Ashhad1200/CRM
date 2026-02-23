@@ -1,0 +1,161 @@
+# ── Global ────────────────────────────────────────────────────────────────
+global:
+  environment: production
+
+# ── Image ─────────────────────────────────────────────────────────────────
+image:
+  repository: ghcr.io/softcrm/api
+  tag: latest
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# ── API Deployment ────────────────────────────────────────────────────────
+api:
+  replicaCount: 3
+  port: 3000
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 15
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+# ── Web Deployment ────────────────────────────────────────────────────────
+web:
+  enabled: true
+  image:
+    repository: ghcr.io/softcrm/web
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 2
+  port: 80
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+# ── Service ───────────────────────────────────────────────────────────────
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+
+# ── Ingress ───────────────────────────────────────────────────────────────
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: crm.example.com
+      paths:
+        - path: /api
+          pathType: Prefix
+          service: api
+        - path: /
+          pathType: Prefix
+          service: web
+  tls:
+    - secretName: softcrm-tls
+      hosts:
+        - crm.example.com
+
+# ── ConfigMap values ──────────────────────────────────────────────────────
+config:
+  NODE_ENV: production
+  LOG_LEVEL: info
+  CORS_ORIGIN: "https://crm.example.com"
+  MEILISEARCH_HOST: "http://meilisearch:7700"
+  REDIS_URL: "redis://redis:6379"
+  S3_BUCKET: softcrm-uploads
+  S3_REGION: us-east-1
+
+# ── Secrets (override via --set or external secret manager) ───────────────
+secrets:
+  DATABASE_URL: ""
+  JWT_SECRET: ""
+  JWT_REFRESH_SECRET: ""
+  REDIS_PASSWORD: ""
+  MEILISEARCH_API_KEY: ""
+  S3_ACCESS_KEY: ""
+  S3_SECRET_KEY: ""
+  SMTP_HOST: ""
+  SMTP_USER: ""
+  SMTP_PASS: ""
+
+# ── PostgreSQL (external) ────────────────────────────────────────────────
+postgresql:
+  external: true
+  host: ""
+  port: 5432
+  database: softcrm
+  sslMode: require
+
+# ── Redis (external) ─────────────────────────────────────────────────────
+redis:
+  external: true
+  host: ""
+  port: 6379
+
+# ── Meilisearch ──────────────────────────────────────────────────────────
+meilisearch:
+  enabled: false
+  # Set to true to deploy Meilisearch inside the cluster
+
+# ── Worker (BullMQ job processor) ────────────────────────────────────────
+worker:
+  enabled: true
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+
+# ── Monitoring ────────────────────────────────────────────────────────────
+serviceMonitor:
+  enabled: false
+  namespace: monitoring
+  interval: 30s
+  labels:
+    release: prometheus

@@ -1,0 +1,215 @@
+# ==============================================================================
+# SoftCRM — Docker Compose for Local Development
+# ==============================================================================
+# Usage:
+#   docker compose up -d          Start all services (infra + app)
+#   docker compose down            Stop all services
+#   docker compose logs -f api     Follow API logs
+#   docker compose logs -f web     Follow frontend logs
+#   docker compose exec db psql -U softcrm softcrm_dev  Connect to Postgres
+#
+# Infrastructure only (no app servers):
+#   docker compose up -d db redis meilisearch minio
+# ==============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL 16 — Primary OLTP database
+  # ---------------------------------------------------------------------------
+  db:
+    image: postgres:16-alpine
+    container_name: softcrm-db
+    restart: unless-stopped
+    ports:
+      - "${DB_PORT:-5433}:5432"
+    environment:
+      POSTGRES_USER: ${DB_USER:-softcrm}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-softcrm_dev_pass}
+      POSTGRES_DB: ${DB_NAME:-softcrm_dev}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./tools/scripts/init-schemas.sql:/docker-entrypoint-initdb.d/01-init-schemas.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-softcrm} -d ${DB_NAME:-softcrm_dev}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - softcrm-net
+
+  # ---------------------------------------------------------------------------
+  # Redis 7 — Cache, sessions, JWT blacklist, BullMQ, Socket.IO adapter
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: softcrm-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - softcrm-net
+
+  # ---------------------------------------------------------------------------
+  # Meilisearch — Full-text search (contacts, KB articles, products)
+  # ---------------------------------------------------------------------------
+  meilisearch:
+    image: getmeili/meilisearch:v1.11
+    container_name: softcrm-meilisearch
+    restart: unless-stopped
+    ports:
+      - "${MEILI_PORT:-7700}:7700"
+    environment:
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-softcrm_dev_meili_key}
+      MEILI_ENV: development
+      MEILI_NO_ANALYTICS: true
+    volumes:
+      - meilidata:/meili_data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - softcrm-net
+
+  # ---------------------------------------------------------------------------
+  # MinIO — S3-compatible object storage (dev replacement for AWS S3)
+  # ---------------------------------------------------------------------------
+  minio:
+    image: minio/minio:latest
+    container_name: softcrm-minio
+    restart: unless-stopped
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-softcrm_minio}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-softcrm_minio_secret}
+    command: server /data --console-address ":9001"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - softcrm-net
+
+  # ---------------------------------------------------------------------------
+  # API Server — Express 5 backend (hot-reload via tsx watch)
+  # ---------------------------------------------------------------------------
+  api:
+    image: node:22-alpine
+    container_name: softcrm-api
+    restart: unless-stopped
+    working_dir: /app
+    ports:
+      - "${PORT:-4000}:4000"
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      DATABASE_URL: postgresql://${DB_USER:-softcrm}:${DB_PASSWORD:-softcrm_dev_pass}@db:5432/${DB_NAME:-softcrm_dev}?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-change-me-to-a-random-64-char-string-in-production}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-to-another-random-64-char-string}
+      JWT_ACCESS_EXPIRY: ${JWT_ACCESS_EXPIRY:-15m}
+      JWT_REFRESH_EXPIRY: ${JWT_REFRESH_EXPIRY:-7d}
+      MEILI_HOST: http://meilisearch:7700
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-softcrm_dev_meili_key}
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-softcrm_minio}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-softcrm_minio_secret}
+      S3_BUCKET: ${S3_BUCKET:-softcrm-uploads}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      EMAIL_PROVIDER: console
+      LOG_LEVEL: debug
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+    command: >
+      sh -c "
+        corepack enable &&
+        corepack prepare pnpm@9.15.4 --activate &&
+        pnpm install --frozen-lockfile &&
+        for i in 1 2 3 4 5; do
+          pnpm --filter @softcrm/db exec prisma generate --schema prisma/schema && break
+          echo \"prisma generate attempt $$i failed, retrying in 5s...\"
+          sleep 5
+        done &&
+        pnpm --filter @softcrm/db exec prisma migrate deploy --schema prisma/schema &&
+        pnpm run db:seed || true &&
+        pnpm --filter @softcrm/api dev
+      "
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 180s
+    networks:
+      - softcrm-net
+
+  # ---------------------------------------------------------------------------
+  # Web Frontend — Vite + React 19 (HMR via websocket)
+  # ---------------------------------------------------------------------------
+  web:
+    image: node:22-alpine
+    container_name: softcrm-web
+    restart: unless-stopped
+    working_dir: /app
+    ports:
+      - "${WEB_PORT:-5173}:5173"
+    environment:
+      NODE_ENV: development
+      VITE_API_TARGET: http://api:4000
+      VITE_HOST: "0.0.0.0"
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+    command: >
+      sh -c "
+        corepack enable &&
+        corepack prepare pnpm@9.15.4 --activate &&
+        pnpm --filter @softcrm/web dev
+      "
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5173 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 45s
+    networks:
+      - softcrm-net
+
+volumes:
+  pgdata:
+    driver: local
+  redisdata:
+    driver: local
+  meilidata:
+    driver: local
+  miniodata:
+    driver: local
+  node_modules:
+    driver: local
+
+networks:
+  softcrm-net:
+    driver: bridge

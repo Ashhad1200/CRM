@@ -1,0 +1,150 @@
+// ── Projects Module Schema ──────────────────────────────────────────────────
+// Post-sale project boards from deal templates, task management, time tracking,
+// milestones, and client portal progress view.
+
+// ── Enums ──────────────────────────────────────────────────────────────────────
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+
+  @@schema("projects")
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+
+  @@schema("projects")
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+
+  @@schema("projects")
+}
+
+// ── Models ─────────────────────────────────────────────────────────────────────
+
+/// Reusable project template with pre-defined tasks, milestones, and assignees.
+model ProjectTemplate {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @db.Uuid
+  name             String   @db.VarChar(255)
+  tasks            Json     // Array of { title, description, priority, order }
+  milestones       Json     // Array of { name, taskIndices[], offsetDays }
+  defaultAssignees Json     // Array of { role/userId mappings }
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime @updatedAt @db.Timestamptz(3)
+
+  projects Project[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@schema("projects")
+}
+
+/// A project instance, optionally linked to a deal and account.
+model Project {
+  id         String        @id @default(uuid()) @db.Uuid
+  tenantId   String        @db.Uuid
+  name       String        @db.VarChar(255)
+  dealId     String?       @db.Uuid
+  accountId  String?       @db.Uuid
+  templateId String?       @db.Uuid
+  status     ProjectStatus @default(PLANNING)
+  startDate  DateTime?     @db.Timestamptz(3)
+  endDate    DateTime?     @db.Timestamptz(3)
+  createdAt  DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime      @updatedAt @db.Timestamptz(3)
+
+  template   ProjectTemplate? @relation(fields: [templateId], references: [id])
+  tasks      Task[]
+  milestones Milestone[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, dealId])
+  @@index([tenantId, accountId])
+  @@schema("projects")
+}
+
+/// A task within a project, orderable on a Kanban board.
+model Task {
+  id          String       @id @default(uuid()) @db.Uuid
+  projectId   String       @db.Uuid
+  title       String       @db.VarChar(500)
+  description String?      @db.Text
+  assigneeId  String?      @db.Uuid
+  priority    TaskPriority @default(MEDIUM)
+  status      TaskStatus   @default(TODO)
+  dueDate     DateTime?    @db.Timestamptz(3)
+  order       Int          @default(0)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
+
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  timeEntries    TimeEntry[]
+  milestoneTasks MilestoneTask[]
+
+  @@index([projectId, status])
+  @@index([projectId, order])
+  @@index([assigneeId])
+  @@schema("projects")
+}
+
+/// A milestone within a project, auto-completes when all linked tasks are done.
+model Milestone {
+  id          String    @id @default(uuid()) @db.Uuid
+  projectId   String    @db.Uuid
+  name        String    @db.VarChar(255)
+  dueDate     DateTime? @db.Timestamptz(3)
+  completedAt DateTime? @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestoneTasks MilestoneTask[]
+
+  @@index([projectId])
+  @@schema("projects")
+}
+
+/// Join table linking milestones to their tasks.
+model MilestoneTask {
+  id          String @id @default(uuid()) @db.Uuid
+  milestoneId String @db.Uuid
+  taskId      String @db.Uuid
+
+  milestone Milestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([milestoneId, taskId])
+  @@schema("projects")
+}
+
+/// Time entry logged against a task.
+model TimeEntry {
+  id          String   @id @default(uuid()) @db.Uuid
+  taskId      String   @db.Uuid
+  userId      String   @db.Uuid
+  hours       Decimal  @db.Decimal(6, 2)
+  isBillable  Boolean  @default(true)
+  description String?  @db.Text
+  date        DateTime @db.Date
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([userId])
+  @@schema("projects")
+}

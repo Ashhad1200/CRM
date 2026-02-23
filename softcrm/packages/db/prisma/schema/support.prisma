@@ -1,0 +1,167 @@
+// ── Support Module Schema ───────────────────────────────────────────────────────
+// Multi-channel ticketing with SLA enforcement, knowledge base, and CSAT surveys.
+
+// ── Enums ──────────────────────────────────────────────────────────────────────
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_CUSTOMER
+  WAITING_INTERNAL
+  RESOLVED
+  CLOSED
+
+  @@schema("support")
+}
+
+enum TicketChannel {
+  EMAIL
+  PHONE
+  CHAT
+  PORTAL
+  SOCIAL
+  API
+
+  @@schema("support")
+}
+
+enum AuthorType {
+  AGENT
+  CUSTOMER
+  SYSTEM
+
+  @@schema("support")
+}
+
+enum ArticleStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+
+  @@schema("support")
+}
+
+// ── Models ─────────────────────────────────────────────────────────────────────
+
+model SlaPolicy {
+  id                   String   @id @default(uuid())
+  tenantId             String
+  name                 String
+  priority             Priority
+  firstResponseMinutes Int
+  resolutionMinutes    Int
+  isDefault            Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  tickets Ticket[]
+
+  @@unique([tenantId, priority])
+  @@schema("support")
+}
+
+model Ticket {
+  id              String       @id @default(uuid())
+  tenantId        String
+  ticketNumber    Int
+  subject         String
+  description     String
+  priority        Priority     @default(MEDIUM)
+  status          TicketStatus @default(OPEN)
+  channel         TicketChannel @default(PORTAL)
+  contactId       String?
+  accountId       String?
+  assignedAgentId String?
+  slaPolicyId     String?
+  slaDeadline     DateTime?
+  firstResponseAt DateTime?
+  resolvedAt      DateTime?
+  closedAt        DateTime?
+  tags            String[]     @default([])
+  createdBy       String
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  version         Int          @default(1)
+
+  slaPolicy SlaPolicy? @relation(fields: [slaPolicyId], references: [id])
+  replies   TicketReply[]
+  surveys   CsatSurvey[]
+
+  @@unique([tenantId, ticketNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, assignedAgentId])
+  @@index([tenantId, priority])
+  @@index([tenantId, slaDeadline])
+  @@schema("support")
+}
+
+model TicketReply {
+  id          String     @id @default(uuid())
+  ticketId    String
+  authorId    String
+  authorType  AuthorType
+  body        String
+  attachments Json       @default("[]")
+  isInternal  Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+  @@schema("support")
+}
+
+model KBCategory {
+  id        String   @id @default(uuid())
+  tenantId  String
+  name      String
+  parentId  String?
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  parent   KBCategory?  @relation("KBCategoryTree", fields: [parentId], references: [id])
+  children KBCategory[] @relation("KBCategoryTree")
+  articles KBArticle[]
+
+  @@unique([tenantId, name])
+  @@schema("support")
+}
+
+model KBArticle {
+  id           String        @id @default(uuid())
+  tenantId     String
+  title        String
+  slug         String
+  body         String
+  categoryId   String?
+  status       ArticleStatus @default(DRAFT)
+  viewCount    Int           @default(0)
+  helpfulCount Int           @default(0)
+  authorId     String
+  publishedAt  DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  version      Int           @default(1)
+
+  category KBCategory? @relation(fields: [categoryId], references: [id])
+
+  @@unique([tenantId, slug])
+  @@index([tenantId, status])
+  @@schema("support")
+}
+
+model CsatSurvey {
+  id          String    @id @default(uuid())
+  tenantId    String
+  ticketId    String
+  rating      Int?
+  comment     String?
+  sentAt      DateTime  @default(now())
+  submittedAt DateTime?
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@unique([ticketId])
+  @@schema("support")
+}

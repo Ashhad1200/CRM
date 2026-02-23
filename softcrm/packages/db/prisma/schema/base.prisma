@@ -1,0 +1,63 @@
+// ── Base Prisma Configuration ──────────────────────────────────────────────────
+// Datasource, generator, and shared enums used across all module schemas.
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["platform", "sales", "accounting", "support", "marketing", "inventory", "projects", "comms", "analytics"]
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ── Shared Enums ───────────────────────────────────────────────────────────────
+
+enum Currency {
+  USD
+  EUR
+  GBP
+  CAD
+  AUD
+  JPY
+  CHF
+  BRL
+  INR
+  MXN
+
+  @@schema("platform")
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+
+  @@schema("platform")
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+
+  @@schema("platform")
+}
+
+enum AccessLevel {
+  NONE
+  READ
+  WRITE
+  ADMIN
+
+  @@schema("platform")
+}
+
+enum OwnershipScope {
+  OWN
+  TEAM
+  ALL
+
+  @@schema("platform")
+}

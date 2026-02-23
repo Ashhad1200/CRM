@@ -8,7 +8,19 @@
     },
     "chat.tools.terminal.autoApprove": {
         ".specify/scripts/bash/": true,
-        ".specify/scripts/powershell/": true
+        ".specify/scripts/powershell/": true,
+        "/^docker exec softcrm-db psql -U softcrm -d softcrm_dev -c \"SELECT table_schema, table_name FROM information_schema\\.tables WHERE table_schema = 'platform' ORDER BY table_name;\" 2>&1 \\| Out-String$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^cd c:\\\\Dev\\\\soft\\\\soft\\\\CRM\\\\softcrm\\\\packages\\\\db; \\$env:DATABASE_URL=\"postgresql://softcrm:softcrm_dev_pass@localhost:5433/softcrm_dev\\?schema=public\"; npx prisma migrate dev --schema prisma/schema --name add_all_module_tables 2>&1$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^\\$env:DATABASE_URL=\"postgresql://softcrm:softcrm_dev_pass@localhost:5433/softcrm_dev\\?schema=public\"; pnpm exec tsx prisma/seed\\.ts 2>&1 \\| Select-Object -Last 20$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
     }
 }
 

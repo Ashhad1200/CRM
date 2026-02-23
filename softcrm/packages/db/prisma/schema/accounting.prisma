@@ -1,0 +1,334 @@
+// ── Accounting Module Schema ─────────────────────────────────────────────────
+// Double-entry bookkeeping: ChartOfAccounts, JournalEntries, Invoices,
+// Payments, Expenses, FiscalPeriods, RecurringInvoices, CreditNotes.
+
+// ── Account Type ────────────────────────────────────────────────────────────────
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+
+  @@schema("accounting")
+}
+
+// ── Invoice Status ──────────────────────────────────────────────────────────────
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PARTIAL
+  PAID
+  VOID
+  OVERDUE
+
+  @@schema("accounting")
+}
+
+// ── Expense Status ──────────────────────────────────────────────────────────────
+
+enum ExpenseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+
+  @@schema("accounting")
+}
+
+// ── Fiscal Period Status ────────────────────────────────────────────────────────
+
+enum FiscalPeriodStatus {
+  OPEN
+  CLOSED
+
+  @@schema("accounting")
+}
+
+// ── Recurring Frequency ─────────────────────────────────────────────────────────
+
+enum RecurringFrequency {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  QUARTERLY
+  ANNUALLY
+
+  @@schema("accounting")
+}
+
+// ── Payment Method ──────────────────────────────────────────────────────────────
+
+enum PaymentMethod {
+  CASH
+  CHECK
+  CREDIT_CARD
+  BANK_TRANSFER
+  WIRE
+  ACH
+  OTHER
+
+  @@schema("accounting")
+}
+
+// ── Chart of Accounts ───────────────────────────────────────────────────────────
+
+model ChartOfAccount {
+  id        String      @id @default(uuid()) @db.Uuid
+  tenantId  String      @map("tenant_id") @db.Uuid
+  code      String      @db.VarChar(20)
+  name      String      @db.VarChar(200)
+  type      AccountType
+  parentId  String?     @map("parent_id") @db.Uuid
+  isSystem  Boolean     @default(false) @map("is_system")
+  isActive  Boolean     @default(true) @map("is_active")
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+  createdBy String?     @map("created_by") @db.Uuid
+
+  parent    ChartOfAccount?  @relation("AccountHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children  ChartOfAccount[] @relation("AccountHierarchy")
+
+  journalLines  JournalLine[]
+  invoiceLines  InvoiceLine[]
+  expenses      Expense[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([tenantId, type])
+  @@map("chart_of_accounts")
+  @@schema("accounting")
+}
+
+// ── Fiscal Period ───────────────────────────────────────────────────────────────
+
+model FiscalPeriod {
+  id        String             @id @default(uuid()) @db.Uuid
+  tenantId  String             @map("tenant_id") @db.Uuid
+  year      Int
+  month     Int
+  name      String             @db.VarChar(50)
+  startDate DateTime           @map("start_date") @db.Date
+  endDate   DateTime           @map("end_date") @db.Date
+  status    FiscalPeriodStatus @default(OPEN)
+  closedAt  DateTime?          @map("closed_at")
+  closedBy  String?            @map("closed_by") @db.Uuid
+  createdAt DateTime           @default(now()) @map("created_at")
+  updatedAt DateTime           @updatedAt @map("updated_at")
+
+  journalEntries JournalEntry[]
+
+  @@unique([tenantId, year, month])
+  @@index([tenantId])
+  @@map("fiscal_periods")
+  @@schema("accounting")
+}
+
+// ── Journal Entry ───────────────────────────────────────────────────────────────
+// Immutable: no update or delete. For corrections, create a reversing entry.
+
+model JournalEntry {
+  id              String    @id @default(uuid()) @db.Uuid
+  tenantId        String    @map("tenant_id") @db.Uuid
+  date            DateTime  @db.Date
+  description     String    @db.VarChar(500)
+  reference       Json?
+  periodId        String    @map("period_id") @db.Uuid
+  postedAt        DateTime? @map("posted_at")
+  isReversing     Boolean   @default(false) @map("is_reversing")
+  reversedEntryId String?   @unique @map("reversed_entry_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+  createdBy       String?   @map("created_by") @db.Uuid
+
+  period          FiscalPeriod    @relation(fields: [periodId], references: [id])
+  reversedEntry   JournalEntry?   @relation("ReversalPair", fields: [reversedEntryId], references: [id], onDelete: SetNull)
+  reversal        JournalEntry?   @relation("ReversalPair")
+  lines           JournalLine[]
+  payments        Payment[]
+  creditNotes     CreditNote[]
+
+  @@index([tenantId])
+  @@index([tenantId, periodId])
+  @@index([tenantId, date])
+  @@map("journal_entries")
+  @@schema("accounting")
+}
+
+// ── Journal Line ────────────────────────────────────────────────────────────────
+
+model JournalLine {
+  id             String  @id @default(uuid()) @db.Uuid
+  journalEntryId String  @map("journal_entry_id") @db.Uuid
+  accountId      String  @map("account_id") @db.Uuid
+  debit          Decimal @default(0) @db.Decimal(15, 2)
+  credit         Decimal @default(0) @db.Decimal(15, 2)
+  description    String? @db.VarChar(500)
+
+  journalEntry   JournalEntry   @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account        ChartOfAccount @relation(fields: [accountId], references: [id])
+
+  @@index([journalEntryId])
+  @@index([accountId])
+  @@map("journal_lines")
+  @@schema("accounting")
+}
+
+// ── Invoice ─────────────────────────────────────────────────────────────────────
+
+model Invoice {
+  id            String        @id @default(uuid()) @db.Uuid
+  tenantId      String        @map("tenant_id") @db.Uuid
+  invoiceNumber Int           @map("invoice_number")
+  contactId     String?       @map("contact_id") @db.Uuid
+  accountId     String?       @map("account_id") @db.Uuid
+  dealId        String?       @map("deal_id") @db.Uuid
+  status        InvoiceStatus @default(DRAFT)
+  currency      Currency      @default(USD)
+  subtotal      Decimal       @default(0) @db.Decimal(15, 2)
+  taxAmount     Decimal       @default(0) @map("tax_amount") @db.Decimal(15, 2)
+  total         Decimal       @default(0) @db.Decimal(15, 2)
+  paidAmount    Decimal       @default(0) @map("paid_amount") @db.Decimal(15, 2)
+  paymentTerms  String?       @map("payment_terms") @db.VarChar(100)
+  dueDate       DateTime?     @map("due_date") @db.Date
+  sentAt        DateTime?     @map("sent_at")
+  paidAt        DateTime?     @map("paid_at")
+  notes         String?       @db.Text
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  createdBy     String?       @map("created_by") @db.Uuid
+  updatedBy     String?       @map("updated_by") @db.Uuid
+  version       Int           @default(1)
+
+  lines       InvoiceLine[]
+  payments    Payment[]
+  creditNotes CreditNote[]
+  recurring   RecurringInvoice[]
+
+  @@unique([tenantId, invoiceNumber])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, contactId])
+  @@index([tenantId, dealId])
+  @@map("invoices")
+  @@schema("accounting")
+}
+
+// ── Invoice Line ────────────────────────────────────────────────────────────────
+
+model InvoiceLine {
+  id          String  @id @default(uuid()) @db.Uuid
+  invoiceId   String  @map("invoice_id") @db.Uuid
+  accountId   String? @map("account_id") @db.Uuid
+  description String  @db.VarChar(500)
+  quantity    Decimal @default(1) @db.Decimal(10, 2)
+  unitPrice   Decimal @map("unit_price") @db.Decimal(15, 2)
+  discount    Decimal @default(0) @db.Decimal(5, 2)
+  taxRate     Decimal @default(0) @map("tax_rate") @db.Decimal(5, 2)
+  lineTotal   Decimal @default(0) @map("line_total") @db.Decimal(15, 2)
+
+  invoice     Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  account     ChartOfAccount? @relation(fields: [accountId], references: [id])
+
+  @@index([invoiceId])
+  @@map("invoice_lines")
+  @@schema("accounting")
+}
+
+// ── Payment ─────────────────────────────────────────────────────────────────────
+
+model Payment {
+  id             String        @id @default(uuid()) @db.Uuid
+  tenantId       String        @map("tenant_id") @db.Uuid
+  invoiceId      String        @map("invoice_id") @db.Uuid
+  amount         Decimal       @db.Decimal(15, 2)
+  method         PaymentMethod @default(BANK_TRANSFER)
+  reference      String?       @db.VarChar(200)
+  date           DateTime      @db.Date
+  journalEntryId String?       @map("journal_entry_id") @db.Uuid
+  notes          String?       @db.Text
+  createdAt      DateTime      @default(now()) @map("created_at")
+  createdBy      String?       @map("created_by") @db.Uuid
+
+  invoice        Invoice       @relation(fields: [invoiceId], references: [id])
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id])
+
+  @@index([tenantId])
+  @@index([invoiceId])
+  @@map("payments")
+  @@schema("accounting")
+}
+
+// ── Expense ─────────────────────────────────────────────────────────────────────
+
+model Expense {
+  id              String        @id @default(uuid()) @db.Uuid
+  tenantId        String        @map("tenant_id") @db.Uuid
+  vendorName      String        @map("vendor_name") @db.VarChar(255)
+  description     String?       @db.VarChar(500)
+  amount          Decimal       @db.Decimal(15, 2)
+  currency        Currency      @default(USD)
+  categoryId      String        @map("category_id") @db.Uuid
+  date            DateTime      @db.Date
+  receiptUrl      String?       @map("receipt_url") @db.VarChar(500)
+  projectId       String?       @map("project_id") @db.Uuid
+  status          ExpenseStatus @default(PENDING)
+  approvedBy      String?       @map("approved_by") @db.Uuid
+  approvedAt      DateTime?     @map("approved_at")
+  rejectedReason  String?       @map("rejected_reason") @db.VarChar(500)
+  journalEntryId  String?       @map("journal_entry_id") @db.Uuid
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  createdBy       String?       @map("created_by") @db.Uuid
+
+  category        ChartOfAccount @relation(fields: [categoryId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, categoryId])
+  @@map("expenses")
+  @@schema("accounting")
+}
+
+// ── Recurring Invoice ───────────────────────────────────────────────────────────
+
+model RecurringInvoice {
+  id                  String             @id @default(uuid()) @db.Uuid
+  tenantId            String             @map("tenant_id") @db.Uuid
+  templateInvoiceId   String             @map("template_invoice_id") @db.Uuid
+  frequency           RecurringFrequency
+  nextRunDate         DateTime           @map("next_run_date") @db.Date
+  lastRunDate         DateTime?          @map("last_run_date") @db.Date
+  isActive            Boolean            @default(true) @map("is_active")
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+  createdBy           String?            @map("created_by") @db.Uuid
+
+  templateInvoice     Invoice            @relation(fields: [templateInvoiceId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, isActive, nextRunDate])
+  @@map("recurring_invoices")
+  @@schema("accounting")
+}
+
+// ── Credit Note ─────────────────────────────────────────────────────────────────
+
+model CreditNote {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  invoiceId      String   @map("invoice_id") @db.Uuid
+  amount         Decimal  @db.Decimal(15, 2)
+  reason         String   @db.VarChar(500)
+  journalEntryId String?  @map("journal_entry_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at")
+  createdBy      String?  @map("created_by") @db.Uuid
+
+  invoice        Invoice       @relation(fields: [invoiceId], references: [id])
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id])
+
+  @@index([tenantId])
+  @@index([invoiceId])
+  @@map("credit_notes")
+  @@schema("accounting")
+}
