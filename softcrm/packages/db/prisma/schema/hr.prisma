@@ -1,0 +1,351 @@
+// ── HR & Payroll Module Schema ──────────────────────────────────────────────────
+// Departments, Positions, Employees, Leave, Attendance, Payroll, Benefits, Tax
+
+// Note: Currency and Priority enums are defined in base.prisma (@@schema("platform"))
+
+// ── Employment Type ─────────────────────────────────────────────────────────────
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERN
+
+  @@schema("hr")
+}
+
+// ── Employee Status ─────────────────────────────────────────────────────────────
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+  ON_LEAVE
+  TERMINATED
+
+  @@schema("hr")
+}
+
+// ── Leave Request Status ────────────────────────────────────────────────────────
+
+enum LeaveRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+
+  @@schema("hr")
+}
+
+// ── Attendance Status ───────────────────────────────────────────────────────────
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  HALF_DAY
+  HOLIDAY
+
+  @@schema("hr")
+}
+
+// ── Payroll Run Status ──────────────────────────────────────────────────────────
+
+enum PayrollRunStatus {
+  DRAFT
+  CALCULATING
+  PENDING_APPROVAL
+  APPROVED
+  PAID
+
+  @@schema("hr")
+}
+
+// ── Pay Slip Status ─────────────────────────────────────────────────────────────
+
+enum PaySlipStatus {
+  DRAFT
+  APPROVED
+  PAID
+
+  @@schema("hr")
+}
+
+// ── Benefit Type ────────────────────────────────────────────────────────────────
+
+enum BenefitType {
+  HEALTH
+  DENTAL
+  VISION
+  RETIREMENT
+  OTHER
+
+  @@schema("hr")
+}
+
+// ── Department ──────────────────────────────────────────────────────────────────
+
+model Department {
+  id                 String       @id @default(uuid()) @db.Uuid
+  tenantId           String       @map("tenant_id") @db.Uuid
+  name               String       @db.VarChar(200)
+  parentDepartmentId String?      @map("parent_department_id") @db.Uuid
+  managerId          String?      @map("manager_id") @db.Uuid
+  createdAt          DateTime     @default(now()) @map("created_at")
+  updatedAt          DateTime     @updatedAt @map("updated_at")
+
+  parentDepartment   Department?  @relation("DepartmentHierarchy", fields: [parentDepartmentId], references: [id], onDelete: SetNull)
+  childDepartments   Department[] @relation("DepartmentHierarchy")
+  positions          Position[]
+  employees          Employee[]
+
+  @@index([tenantId])
+  @@index([tenantId, parentDepartmentId])
+  @@map("departments")
+  @@schema("hr")
+}
+
+// ── Position ────────────────────────────────────────────────────────────────────
+
+model Position {
+  id           String      @id @default(uuid()) @db.Uuid
+  tenantId     String      @map("tenant_id") @db.Uuid
+  name         String      @db.VarChar(200)
+  departmentId String?     @map("department_id") @db.Uuid
+  minSalary    Decimal?    @map("min_salary") @db.Decimal(15, 2)
+  maxSalary    Decimal?    @map("max_salary") @db.Decimal(15, 2)
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  employees    Employee[]
+
+  @@index([tenantId])
+  @@index([tenantId, departmentId])
+  @@map("positions")
+  @@schema("hr")
+}
+
+// ── Employee ────────────────────────────────────────────────────────────────────
+
+model Employee {
+  id               String         @id @default(uuid()) @db.Uuid
+  tenantId         String         @map("tenant_id") @db.Uuid
+  userId           String?        @map("user_id") @db.Uuid
+  employeeNumber   String         @map("employee_number") @db.VarChar(50)
+  firstName        String         @map("first_name") @db.VarChar(100)
+  lastName         String         @map("last_name") @db.VarChar(100)
+  email            String         @db.VarChar(255)
+  phone            String?        @db.VarChar(50)
+  departmentId     String?        @map("department_id") @db.Uuid
+  positionId       String?        @map("position_id") @db.Uuid
+  managerId        String?        @map("manager_id") @db.Uuid
+  employmentType   EmploymentType @default(FULL_TIME) @map("employment_type")
+  status           EmployeeStatus @default(ACTIVE)
+  hireDate         DateTime       @map("hire_date") @db.Date
+  terminationDate  DateTime?      @map("termination_date") @db.Date
+  avatarUrl        String?        @map("avatar_url") @db.VarChar(500)
+  address          Json?
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+  createdBy        String?        @map("created_by") @db.Uuid
+  updatedBy        String?        @map("updated_by") @db.Uuid
+  version          Int            @default(1)
+
+  department       Department?    @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  position         Position?      @relation(fields: [positionId], references: [id], onDelete: SetNull)
+  manager          Employee?      @relation("EmployeeHierarchy", fields: [managerId], references: [id], onDelete: SetNull)
+  directReports    Employee[]     @relation("EmployeeHierarchy")
+  leaveRequests    LeaveRequest[]
+  attendance       Attendance[]
+  paySlips         PaySlip[]
+
+  @@unique([tenantId, employeeNumber])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, departmentId])
+  @@index([tenantId, managerId])
+  @@map("employees")
+  @@schema("hr")
+}
+
+// ── Leave Type ──────────────────────────────────────────────────────────────────
+
+model LeaveType {
+  id              String         @id @default(uuid()) @db.Uuid
+  tenantId        String         @map("tenant_id") @db.Uuid
+  name            String         @db.VarChar(100)
+  maxDaysPerYear  Int            @map("max_days_per_year")
+  carryOver       Boolean        @default(false) @map("carry_over")
+  paidLeave       Boolean        @default(true) @map("paid_leave")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  leaveRequests   LeaveRequest[]
+
+  @@index([tenantId])
+  @@map("leave_types")
+  @@schema("hr")
+}
+
+// ── Leave Request ───────────────────────────────────────────────────────────────
+
+model LeaveRequest {
+  id           String             @id @default(uuid()) @db.Uuid
+  tenantId     String             @map("tenant_id") @db.Uuid
+  employeeId   String             @map("employee_id") @db.Uuid
+  leaveTypeId  String             @map("leave_type_id") @db.Uuid
+  startDate    DateTime           @map("start_date") @db.Date
+  endDate      DateTime           @map("end_date") @db.Date
+  days         Decimal            @db.Decimal(5, 1)
+  reason       String?            @db.Text
+  status       LeaveRequestStatus @default(PENDING)
+  approvedBy   String?            @map("approved_by") @db.Uuid
+  approvedAt   DateTime?          @map("approved_at")
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+  createdBy    String?            @map("created_by") @db.Uuid
+  version      Int                @default(1)
+
+  employee     Employee           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType    LeaveType          @relation(fields: [leaveTypeId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, employeeId])
+  @@index([tenantId, status])
+  @@index([tenantId, employeeId, status])
+  @@map("leave_requests")
+  @@schema("hr")
+}
+
+// ── Attendance ──────────────────────────────────────────────────────────────────
+
+model Attendance {
+  id           String           @id @default(uuid()) @db.Uuid
+  tenantId     String           @map("tenant_id") @db.Uuid
+  employeeId   String           @map("employee_id") @db.Uuid
+  date         DateTime         @db.Date
+  checkIn      DateTime?        @map("check_in")
+  checkOut     DateTime?        @map("check_out")
+  hoursWorked  Decimal?         @map("hours_worked") @db.Decimal(5, 2)
+  status       AttendanceStatus @default(PRESENT)
+  notes        String?          @db.Text
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+
+  employee     Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, employeeId, date])
+  @@index([tenantId])
+  @@index([tenantId, employeeId])
+  @@index([tenantId, date])
+  @@map("attendance")
+  @@schema("hr")
+}
+
+// ── Payroll Structure ───────────────────────────────────────────────────────────
+
+model PayrollStructure {
+  id          String        @id @default(uuid()) @db.Uuid
+  tenantId    String        @map("tenant_id") @db.Uuid
+  name        String        @db.VarChar(200)
+  components  Json
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  payrollRuns PayrollRun[]
+
+  @@index([tenantId])
+  @@map("payroll_structures")
+  @@schema("hr")
+}
+
+// ── Payroll Run ─────────────────────────────────────────────────────────────────
+
+model PayrollRun {
+  id                 String           @id @default(uuid()) @db.Uuid
+  tenantId           String           @map("tenant_id") @db.Uuid
+  period             String           @db.VarChar(7)
+  payrollStructureId String?          @map("payroll_structure_id") @db.Uuid
+  status             PayrollRunStatus @default(DRAFT)
+  totalGross         Decimal          @default(0) @map("total_gross") @db.Decimal(15, 2)
+  totalDeductions    Decimal          @default(0) @map("total_deductions") @db.Decimal(15, 2)
+  totalNet           Decimal          @default(0) @map("total_net") @db.Decimal(15, 2)
+  approvedBy         String?          @map("approved_by") @db.Uuid
+  approvedAt         DateTime?        @map("approved_at")
+  paidAt             DateTime?        @map("paid_at")
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+  createdBy          String?          @map("created_by") @db.Uuid
+  version            Int              @default(1)
+
+  payrollStructure   PayrollStructure? @relation(fields: [payrollStructureId], references: [id], onDelete: SetNull)
+  paySlips           PaySlip[]
+
+  @@unique([tenantId, period])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("payroll_runs")
+  @@schema("hr")
+}
+
+// ── Pay Slip ────────────────────────────────────────────────────────────────────
+
+model PaySlip {
+  id            String       @id @default(uuid()) @db.Uuid
+  tenantId      String       @map("tenant_id") @db.Uuid
+  payrollRunId  String       @map("payroll_run_id") @db.Uuid
+  employeeId    String       @map("employee_id") @db.Uuid
+  grossPay      Decimal      @default(0) @map("gross_pay") @db.Decimal(15, 2)
+  deductions    Json
+  netPay        Decimal      @default(0) @map("net_pay") @db.Decimal(15, 2)
+  components    Json
+  currency      String       @default("USD") @db.VarChar(3)
+  status        PaySlipStatus @default(DRAFT)
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  payrollRun    PayrollRun   @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  employee      Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([payrollRunId, employeeId])
+  @@index([tenantId])
+  @@index([tenantId, payrollRunId])
+  @@index([tenantId, employeeId])
+  @@map("pay_slips")
+  @@schema("hr")
+}
+
+// ── Benefit ─────────────────────────────────────────────────────────────────────
+
+model Benefit {
+  id                     String      @id @default(uuid()) @db.Uuid
+  tenantId               String      @map("tenant_id") @db.Uuid
+  name                   String      @db.VarChar(200)
+  type                   BenefitType
+  employerContribution   Decimal     @default(0) @map("employer_contribution") @db.Decimal(15, 2)
+  employeeContribution   Decimal     @default(0) @map("employee_contribution") @db.Decimal(15, 2)
+  createdAt              DateTime    @default(now()) @map("created_at")
+  updatedAt              DateTime    @updatedAt @map("updated_at")
+
+  @@index([tenantId])
+  @@index([tenantId, type])
+  @@map("benefits")
+  @@schema("hr")
+}
+
+// ── Tax Bracket ─────────────────────────────────────────────────────────────────
+
+model TaxBracket {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  name       String   @db.VarChar(200)
+  minIncome  Decimal  @map("min_income") @db.Decimal(15, 2)
+  maxIncome  Decimal? @map("max_income") @db.Decimal(15, 2)
+  rate       Decimal  @db.Decimal(5, 4)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([tenantId])
+  @@map("tax_brackets")
+  @@schema("hr")
+}

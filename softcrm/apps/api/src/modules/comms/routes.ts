@@ -274,3 +274,95 @@ commsRouter.get(
     res.json({ data: { url } });
   }),
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── Meeting Scheduler ────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+commsRouter.get(
+  '/scheduler/availability',
+  requirePermission({ module: 'comms', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId, sub: userId } = req.user!;
+    const targetUser = (req.query['userId'] as string) ?? userId;
+    const { getAvailability } = await import('./scheduler.service.js');
+    const slots = await getAvailability(tenantId, targetUser);
+    res.json({ data: slots });
+  }),
+);
+
+commsRouter.put(
+  '/scheduler/availability',
+  requirePermission({ module: 'comms', action: 'update' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId, sub: userId } = req.user!;
+    const { setAvailability } = await import('./scheduler.service.js');
+    const slots = await setAvailability(tenantId, userId, req.body.slots);
+    res.json({ data: slots });
+  }),
+);
+
+commsRouter.get(
+  '/scheduler/available-slots',
+  requirePermission({ module: 'comms', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const userId = req.query['userId'] as string;
+    const date = new Date(req.query['date'] as string);
+    const duration = req.query['duration'] ? Number(req.query['duration']) : 30;
+    const { getAvailableSlots } = await import('./scheduler.service.js');
+    const slots = await getAvailableSlots(tenantId, userId, date, duration);
+    res.json({ data: slots });
+  }),
+);
+
+commsRouter.post(
+  '/scheduler/book',
+  requirePermission({ module: 'comms', action: 'create' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId, sub: actorId } = req.user!;
+    const { bookMeeting } = await import('./scheduler.service.js');
+    const meeting = await bookMeeting(tenantId, {
+      ...req.body,
+      hostUserId: req.body.hostUserId ?? actorId,
+    });
+    res.status(201).json({ data: meeting });
+  }),
+);
+
+commsRouter.get(
+  '/scheduler/meetings',
+  requirePermission({ module: 'comms', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId, sub: userId } = req.user!;
+    const from = req.query['from'] ? new Date(req.query['from'] as string) : undefined;
+    const to = req.query['to'] ? new Date(req.query['to'] as string) : undefined;
+    const { getMeetings } = await import('./scheduler.service.js');
+    const meetings = await getMeetings(tenantId, userId, from, to);
+    res.json({ data: meetings });
+  }),
+);
+
+commsRouter.post(
+  '/scheduler/meetings/:id/cancel',
+  requirePermission({ module: 'comms', action: 'update' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const id = param(req, 'id');
+    const { cancelMeeting } = await import('./scheduler.service.js');
+    const meeting = await cancelMeeting(tenantId, id);
+    res.json({ data: meeting });
+  }),
+);
+
+commsRouter.post(
+  '/scheduler/meetings/:id/complete',
+  requirePermission({ module: 'comms', action: 'update' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const id = param(req, 'id');
+    const { completeMeeting } = await import('./scheduler.service.js');
+    const meeting = await completeMeeting(tenantId, id);
+    res.json({ data: meeting });
+  }),
+);

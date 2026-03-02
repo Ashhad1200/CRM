@@ -33,19 +33,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <aside
       className={cn(
-        'flex h-full flex-col border-r border-neutral-200 bg-white transition-all duration-200',
+        'flex h-full flex-col border-r border-white/10 glass-3 backdrop-blur-xl transition-all duration-200',
         collapsed ? 'w-16' : 'w-64',
         className,
       )}
     >
+      {/* Brand mesh gradient */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-brand-500/10 via-accent-500/5 to-transparent" />
+
       {/* Header */}
-      <div className="flex h-14 items-center justify-between border-b border-neutral-200 px-4">
+      <div className="relative flex h-14 items-center justify-between border-b border-white/10 px-4">
         {!collapsed && header}
         {onToggle && (
           <button
             type="button"
             onClick={onToggle}
-            className="rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700"
+            className="rounded-md p-1.5 text-neutral-500 glass-1 hover:glass-1 hover:text-neutral-700"
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -68,10 +71,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 type="button"
                 onClick={item.onClick}
                 className={cn(
-                  'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                   item.active
-                    ? 'bg-brand-50 text-brand-700'
-                    : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900',
+                    ? 'accent-gradient text-white shadow-lg'
+                    : 'text-neutral-600 hover:glass-1 hover:text-neutral-900',
                 )}
                 title={collapsed ? item.label : undefined}
               >
@@ -80,7 +83,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <>
                     <span className="flex-1 truncate text-left">{item.label}</span>
                     {item.badge != null && (
-                      <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-brand-100 px-1 text-xs font-medium text-brand-700">
+                      <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center glass-1 rounded-full px-1 text-xs font-medium text-brand-700">
                         {item.badge}
                       </span>
                     )}
@@ -94,7 +97,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Footer */}
       {footer && (
-        <div className="border-t border-neutral-200 p-3">{footer}</div>
+        <div className="border-t border-white/10 p-3">{footer}</div>
       )}
     </aside>
   );
@@ -122,7 +125,7 @@ export const TopNav: React.FC<TopNavProps> = ({
   return (
     <header
       className={cn(
-        'flex h-14 items-center justify-between border-b border-neutral-200 bg-white px-4',
+        'sticky top-0 z-sticky flex h-14 items-center justify-between border-b border-white/10 glass-2 backdrop-blur-xl px-4',
         className,
       )}
     >
@@ -151,7 +154,7 @@ export interface ShellProps {
 
 export const Shell: React.FC<ShellProps> = ({ sidebar, topNav, children, className }) => {
   return (
-    <div className={cn('flex h-screen overflow-hidden bg-neutral-50', className)}>
+    <div className={cn('flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 mesh-bg', className)}>
       {sidebar}
       <div className="flex flex-1 flex-col overflow-hidden">
         {topNav}
@@ -174,7 +177,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({ items, className }) => {
   return (
     <nav
       className={cn(
-        'fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around border-t border-neutral-200 bg-white py-2 md:hidden',
+        'fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around border-t border-white/10 glass-3 backdrop-blur-xl py-2 pb-[env(safe-area-inset-bottom)] md:hidden',
         className,
       )}
     >
@@ -185,7 +188,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({ items, className }) => {
           onClick={item.onClick}
           className={cn(
             'flex flex-col items-center gap-0.5 px-2 py-1 text-xs',
-            item.active ? 'text-brand-600' : 'text-neutral-500',
+            item.active ? 'text-brand-600 drop-shadow-[0_0_6px_rgba(var(--color-brand-500),0.5)]' : 'text-neutral-500',
           )}
         >
           {item.icon && <span>{item.icon}</span>}

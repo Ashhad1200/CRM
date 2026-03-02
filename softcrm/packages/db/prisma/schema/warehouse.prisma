@@ -1,0 +1,375 @@
+// ── Warehouse / WMS Module Schema ────────────────────────────────────────────
+// Warehouse management: locations, stock lots, stock moves, pick lists,
+// shipments, and cycle counts with full WMS traceability.
+
+// ── Enums ─────────────────────────────────────────────────────────────────────
+
+enum WarehouseStatus {
+  ACTIVE
+  INACTIVE
+
+  @@schema("warehouse")
+}
+
+enum LocationType {
+  RECEIVING
+  STORAGE
+  PICKING
+  SHIPPING
+  QUARANTINE
+
+  @@schema("warehouse")
+}
+
+enum StockLotStatus {
+  AVAILABLE
+  RESERVED
+  QUARANTINE
+  EXPIRED
+
+  @@schema("warehouse")
+}
+
+enum StockMoveType {
+  RECEIPT
+  DELIVERY
+  INTERNAL
+  ADJUSTMENT
+  RETURN
+
+  @@schema("warehouse")
+}
+
+enum StockMoveStatus {
+  DRAFT
+  CONFIRMED
+  DONE
+  CANCELLED
+
+  @@schema("warehouse")
+}
+
+enum PickListStatus {
+  DRAFT
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+
+  @@schema("warehouse")
+}
+
+enum PickListLineStatus {
+  PENDING
+  PARTIAL
+  DONE
+
+  @@schema("warehouse")
+}
+
+enum ShipmentStatus {
+  PENDING
+  SHIPPED
+  IN_TRANSIT
+  DELIVERED
+  RETURNED
+
+  @@schema("warehouse")
+}
+
+enum CycleCountStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+
+  @@schema("warehouse")
+}
+
+// ── Models ────────────────────────────────────────────────────────────────────
+
+model WHWarehouse {
+  id        String          @id @db.VarChar(30)
+  tenantId  String          @map("tenant_id") @db.VarChar(30)
+  name      String          @db.VarChar(255)
+  code      String          @db.VarChar(50)
+  address   Json            @default("{}")
+  isDefault Boolean         @default(false) @map("is_default")
+  status    WarehouseStatus @default(ACTIVE)
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+  createdBy String?         @map("created_by") @db.VarChar(30)
+
+  // Relations
+  locations   WHLocation[]
+  stockLots   WHStockLot[]
+  stockMoves  WHStockMove[]
+  pickLists   WHPickList[]
+  shipments   WHShipment[]
+  cycleCounts WHCycleCount[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, status])
+  @@map("wh_warehouses")
+  @@schema("warehouse")
+}
+
+model WHLocation {
+  id          String       @id @db.VarChar(30)
+  tenantId    String       @map("tenant_id") @db.VarChar(30)
+  warehouseId String       @map("warehouse_id") @db.VarChar(30)
+  name        String       @db.VarChar(255)
+  code        String       @db.VarChar(50)
+  type        LocationType
+  zone        String?      @db.VarChar(50)
+  aisle       String?      @db.VarChar(20)
+  rack        String?      @db.VarChar(20)
+  bin         String?      @db.VarChar(20)
+  maxCapacity Decimal?     @map("max_capacity") @db.Decimal(15, 3)
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  warehouse       WHWarehouse   @relation(fields: [warehouseId], references: [id])
+  stockLots       WHStockLot[]
+  fromMoves       WHStockMove[] @relation("FromLocation")
+  toMoves         WHStockMove[] @relation("ToLocation")
+  pickListLines   WHPickListLine[]
+  cycleCounts     WHCycleCount[]
+
+  @@unique([tenantId, warehouseId, code])
+  @@index([tenantId, warehouseId])
+  @@index([tenantId, type])
+  @@map("wh_locations")
+  @@schema("warehouse")
+}
+
+model WHStockLot {
+  id           String         @id @db.VarChar(30)
+  tenantId     String         @map("tenant_id") @db.VarChar(30)
+  productId    String         @map("product_id") @db.VarChar(30)
+  warehouseId  String         @map("warehouse_id") @db.VarChar(30)
+  locationId   String?        @map("location_id") @db.VarChar(30)
+  lotNumber    String         @map("lot_number") @db.VarChar(100)
+  serialNumber String?        @map("serial_number") @db.VarChar(100)
+  quantity     Decimal        @db.Decimal(15, 3)
+  reservedQty  Decimal        @default(0) @map("reserved_qty") @db.Decimal(15, 3)
+  expiryDate   DateTime?      @map("expiry_date")
+  receivedAt   DateTime       @map("received_at")
+  status       StockLotStatus @default(AVAILABLE)
+
+  // Relations
+  warehouse     WHWarehouse      @relation(fields: [warehouseId], references: [id])
+  location      WHLocation?      @relation(fields: [locationId], references: [id])
+  stockMoves    WHStockMove[]
+  pickListLines WHPickListLine[]
+
+  @@index([tenantId, productId])
+  @@index([tenantId, warehouseId, status])
+  @@index([tenantId, lotNumber])
+  @@map("wh_stock_lots")
+  @@schema("warehouse")
+}
+
+model WHStockMove {
+  id             String          @id @db.VarChar(30)
+  tenantId       String          @map("tenant_id") @db.VarChar(30)
+  reference      String          @db.VarChar(100)
+  moveType       StockMoveType   @map("move_type")
+  productId      String          @map("product_id") @db.VarChar(30)
+  warehouseId    String          @map("warehouse_id") @db.VarChar(30)
+  lotId          String?         @map("lot_id") @db.VarChar(30)
+  fromLocationId String?         @map("from_location_id") @db.VarChar(30)
+  toLocationId   String?         @map("to_location_id") @db.VarChar(30)
+  plannedQty     Decimal         @map("planned_qty") @db.Decimal(15, 3)
+  doneQty        Decimal         @default(0) @map("done_qty") @db.Decimal(15, 3)
+  status         StockMoveStatus @default(DRAFT)
+  sourceDocument String?         @map("source_document") @db.VarChar(100)
+  scheduledDate  DateTime        @map("scheduled_date")
+  doneDate       DateTime?       @map("done_date")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  createdBy      String?         @map("created_by") @db.VarChar(30)
+  version        Int             @default(1)
+
+  // Relations
+  warehouse    WHWarehouse @relation(fields: [warehouseId], references: [id])
+  lot          WHStockLot? @relation(fields: [lotId], references: [id])
+  fromLocation WHLocation? @relation("FromLocation", fields: [fromLocationId], references: [id])
+  toLocation   WHLocation? @relation("ToLocation", fields: [toLocationId], references: [id])
+
+  @@index([tenantId, moveType, status])
+  @@index([tenantId, productId])
+  @@index([tenantId, reference])
+  @@map("wh_stock_moves")
+  @@schema("warehouse")
+}
+
+model WHPickList {
+  id              String         @id @db.VarChar(30)
+  tenantId        String         @map("tenant_id") @db.VarChar(30)
+  warehouseId     String         @map("warehouse_id") @db.VarChar(30)
+  sourceOrderId   String?        @map("source_order_id") @db.VarChar(30)
+  sourceOrderType String?        @map("source_order_type") @db.VarChar(20)
+  status          PickListStatus @default(DRAFT)
+  assignedTo      String?        @map("assigned_to") @db.VarChar(30)
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+  createdBy       String?        @map("created_by") @db.VarChar(30)
+  version         Int            @default(1)
+
+  // Relations
+  warehouse WHWarehouse      @relation(fields: [warehouseId], references: [id])
+  lines     WHPickListLine[]
+  shipments WHShipment[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, warehouseId])
+  @@index([tenantId, sourceOrderId])
+  @@map("wh_pick_lists")
+  @@schema("warehouse")
+}
+
+model WHPickListLine {
+  id           String             @id @db.VarChar(30)
+  pickListId   String             @map("pick_list_id") @db.VarChar(30)
+  productId    String             @map("product_id") @db.VarChar(30)
+  locationId   String             @map("location_id") @db.VarChar(30)
+  lotId        String?            @map("lot_id") @db.VarChar(30)
+  requestedQty Decimal            @map("requested_qty") @db.Decimal(15, 3)
+  pickedQty    Decimal            @default(0) @map("picked_qty") @db.Decimal(15, 3)
+  status       PickListLineStatus @default(PENDING)
+
+  // Relations
+  pickList WHPickList  @relation(fields: [pickListId], references: [id])
+  location WHLocation  @relation(fields: [locationId], references: [id])
+  lot      WHStockLot? @relation(fields: [lotId], references: [id])
+
+  @@index([pickListId])
+  @@map("wh_pick_list_lines")
+  @@schema("warehouse")
+}
+
+model WHShipment {
+  id                String         @id @db.VarChar(30)
+  tenantId          String         @map("tenant_id") @db.VarChar(30)
+  warehouseId       String         @map("warehouse_id") @db.VarChar(30)
+  pickListId        String?        @map("pick_list_id") @db.VarChar(30)
+  carrier           String?        @db.VarChar(100)
+  trackingNumber    String?        @map("tracking_number") @db.VarChar(100)
+  shippedAt         DateTime?      @map("shipped_at")
+  estimatedDelivery DateTime?      @map("estimated_delivery")
+  status            ShipmentStatus @default(PENDING)
+  recipientName     String         @map("recipient_name") @db.VarChar(255)
+  recipientAddress  Json           @map("recipient_address") @default("{}")
+  weight            Decimal?       @db.Decimal(10, 3)
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+  createdBy         String?        @map("created_by") @db.VarChar(30)
+
+  // Relations
+  warehouse WHWarehouse @relation(fields: [warehouseId], references: [id])
+  pickList  WHPickList? @relation(fields: [pickListId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([tenantId, warehouseId])
+  @@map("wh_shipments")
+  @@schema("warehouse")
+}
+
+model WHCycleCount {
+  id           String           @id @db.VarChar(30)
+  tenantId     String           @map("tenant_id") @db.VarChar(30)
+  warehouseId  String           @map("warehouse_id") @db.VarChar(30)
+  locationId   String?          @map("location_id") @db.VarChar(30)
+  status       CycleCountStatus @default(DRAFT)
+  countedBy    String           @map("counted_by") @db.VarChar(30)
+  startedAt    DateTime?        @map("started_at")
+  completedAt  DateTime?        @map("completed_at")
+  discrepancies Json            @default("[]")
+  createdAt    DateTime         @default(now()) @map("created_at")
+  createdBy    String?          @map("created_by") @db.VarChar(30)
+
+  // Relations
+  warehouse WHWarehouse @relation(fields: [warehouseId], references: [id])
+  location  WHLocation? @relation(fields: [locationId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([tenantId, warehouseId])
+  @@map("wh_cycle_counts")
+  @@schema("warehouse")
+}
+
+// ── Pack Order Status ─────────────────────────────────────────────────────────
+
+enum PackOrderStatus {
+  PENDING
+  IN_PROGRESS
+  PACKED
+  SHIPPED
+
+  @@schema("warehouse")
+}
+
+// ── Serial Number ─────────────────────────────────────────────────────────────
+
+model WHSerialNumber {
+  id          String   @id @db.VarChar(30)
+  tenantId    String   @map("tenant_id") @db.VarChar(30)
+  productId   String   @map("product_id") @db.VarChar(30)
+  serialNumber String  @map("serial_number") @db.VarChar(100)
+  lotId       String?  @map("lot_id") @db.VarChar(30)
+  warehouseId String   @map("warehouse_id") @db.VarChar(30)
+  locationId  String?  @map("location_id") @db.VarChar(30)
+  status      StockLotStatus @default(AVAILABLE)
+  receivedAt  DateTime @map("received_at")
+  shippedAt   DateTime? @map("shipped_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([tenantId, serialNumber])
+  @@index([tenantId, productId])
+  @@index([tenantId, warehouseId])
+  @@map("wh_serial_numbers")
+  @@schema("warehouse")
+}
+
+// ── Pack Order ────────────────────────────────────────────────────────────────
+
+model WHPackOrder {
+  id            String          @id @db.VarChar(30)
+  tenantId      String          @map("tenant_id") @db.VarChar(30)
+  warehouseId   String          @map("warehouse_id") @db.VarChar(30)
+  pickListId    String?         @map("pick_list_id") @db.VarChar(30)
+  shipmentId    String?         @map("shipment_id") @db.VarChar(30)
+  status        PackOrderStatus @default(PENDING)
+  packedBy      String?         @map("packed_by") @db.VarChar(30)
+  packedAt      DateTime?       @map("packed_at")
+  totalWeight   Decimal?        @map("total_weight") @db.Decimal(10, 3)
+  boxCount      Int             @default(1) @map("box_count")
+  notes         String?         @db.Text
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+  createdBy     String?         @map("created_by") @db.VarChar(30)
+
+  lines         WHPackOrderLine[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, warehouseId])
+  @@map("wh_pack_orders")
+  @@schema("warehouse")
+}
+
+// ── Pack Order Line ──────────────────────────────────────────────────────────
+
+model WHPackOrderLine {
+  id          String  @id @db.VarChar(30)
+  packOrderId String  @map("pack_order_id") @db.VarChar(30)
+  productId   String  @map("product_id") @db.VarChar(30)
+  quantity    Decimal @db.Decimal(15, 3)
+  boxNumber   Int     @default(1) @map("box_number")
+
+  packOrder   WHPackOrder @relation(fields: [packOrderId], references: [id], onDelete: Cascade)
+
+  @@index([packOrderId])
+  @@map("wh_pack_order_lines")
+  @@schema("warehouse")
+}

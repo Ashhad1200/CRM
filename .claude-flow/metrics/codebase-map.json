@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-02-28T16:35:04.079Z",
+  "projectRoot": "C:\\Dev\\soft\\soft\\CRM",
+  "structure": {
+    "hasPackageJson": false,
+    "hasTsConfig": false,
+    "hasClaudeConfig": true,
+    "hasClaudeFlow": true
+  },
+  "scannedAt": 1772296504079
+}

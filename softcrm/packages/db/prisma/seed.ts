@@ -74,6 +74,13 @@ async function main(): Promise<void> {
     'comms',
     'analytics',
     'workflows',
+    'hr',
+    'manufacturing',
+    'warehouse',
+    'procurement',
+    'pos',
+    'assets',
+    'quality',
   ];
 
   for (const mod of modules) {

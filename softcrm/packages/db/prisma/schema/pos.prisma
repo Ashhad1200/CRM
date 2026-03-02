@@ -1,0 +1,293 @@
+// ── POS Module Schema ────────────────────────────────────────────────────────
+// Point of Sale — Retail and Restaurant.
+// All models live in the "pos" PostgreSQL schema.
+//
+// NOTE: After adding this file, add "pos" to the datasource `schemas` list
+// in base.prisma (the array currently ends at "analytics").
+
+// ── Enums ────────────────────────────────────────────────────────────────────
+
+enum POSTerminalStatus {
+  ONLINE
+  OFFLINE
+  CLOSED
+
+  @@schema("pos")
+}
+
+enum POSSessionStatus {
+  OPEN
+  CLOSED
+
+  @@schema("pos")
+}
+
+enum POSOrderStatus {
+  OPEN
+  PAID
+  REFUNDED
+  VOID
+
+  @@schema("pos")
+}
+
+enum POSPaymentMethod {
+  CASH
+  CARD
+  MOBILE
+  LOYALTY_POINTS
+  SPLIT
+
+  @@schema("pos")
+}
+
+enum POSPaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+
+  @@schema("pos")
+}
+
+enum RestaurantTableStatus {
+  AVAILABLE
+  OCCUPIED
+  RESERVED
+  CLEANING
+
+  @@schema("pos")
+}
+
+enum KitchenOrderStatus {
+  PENDING
+  IN_PROGRESS
+  READY
+  SERVED
+
+  @@schema("pos")
+}
+
+enum KitchenOrderItemStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+
+  @@schema("pos")
+}
+
+// ── Retail POS ───────────────────────────────────────────────────────────────
+
+model POSTerminal {
+  id               String            @id @default(uuid()) @db.Uuid
+  tenantId         String            @map("tenant_id") @db.Uuid
+  name             String            @db.VarChar(200)
+  warehouseId      String?           @map("warehouse_id") @db.Uuid
+  status           POSTerminalStatus @default(OFFLINE)
+  currentSessionId String?           @map("current_session_id") @db.Uuid
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+
+  sessions POSSession[]
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("pos_terminals")
+  @@schema("pos")
+}
+
+model POSSession {
+  id            String           @id @default(uuid()) @db.Uuid
+  tenantId      String           @map("tenant_id") @db.Uuid
+  terminalId    String           @map("terminal_id") @db.Uuid
+  cashierId     String           @map("cashier_id") @db.Uuid
+  openedAt      DateTime         @map("opened_at")
+  closedAt      DateTime?        @map("closed_at")
+  openingCash   Decimal          @map("opening_cash") @db.Decimal(15, 2)
+  closingCash   Decimal?         @map("closing_cash") @db.Decimal(15, 2)
+  expectedCash  Decimal?         @map("expected_cash") @db.Decimal(15, 2)
+  variance      Decimal?         @db.Decimal(15, 2)
+  status        POSSessionStatus @default(OPEN)
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+
+  terminal POSTerminal @relation(fields: [terminalId], references: [id])
+  orders   POSOrder[]
+
+  @@index([tenantId])
+  @@index([tenantId, terminalId])
+  @@index([tenantId, status])
+  @@map("pos_sessions")
+  @@schema("pos")
+}
+
+model POSOrder {
+  id                  String         @id @default(uuid()) @db.Uuid
+  tenantId            String         @map("tenant_id") @db.Uuid
+  sessionId           String         @map("session_id") @db.Uuid
+  orderNumber         String         @map("order_number") @db.VarChar(50)
+  status              POSOrderStatus @default(OPEN)
+  subtotal            Decimal        @default(0) @db.Decimal(15, 2)
+  taxAmount           Decimal        @default(0) @map("tax_amount") @db.Decimal(15, 2)
+  discountAmount      Decimal        @default(0) @map("discount_amount") @db.Decimal(15, 2)
+  total               Decimal        @default(0) @db.Decimal(15, 2)
+  currency            Currency       @default(USD)
+  customerId          String?        @map("customer_id") @db.Uuid
+  loyaltyPointsEarned Int            @default(0) @map("loyalty_points_earned")
+  notes               String?        @db.Text
+  completedAt         DateTime?      @map("completed_at")
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
+  createdBy           String?        @map("created_by") @db.Uuid
+  version             Int            @default(1)
+
+  session        POSSession      @relation(fields: [sessionId], references: [id])
+  lines          POSOrderLine[]
+  payments       POSPayment[]
+  kitchenOrders  KitchenOrder[]
+
+  @@unique([tenantId, orderNumber])
+  @@index([tenantId])
+  @@index([tenantId, sessionId])
+  @@index([tenantId, status])
+  @@index([tenantId, customerId])
+  @@map("pos_orders")
+  @@schema("pos")
+}
+
+model POSOrderLine {
+  id          String  @id @default(uuid()) @db.Uuid
+  orderId     String  @map("order_id") @db.Uuid
+  productId   String  @map("product_id") @db.Uuid
+  description String  @db.VarChar(500)
+  quantity    Decimal @db.Decimal(10, 3)
+  unitPrice   Decimal @map("unit_price") @db.Decimal(15, 2)
+  discount    Decimal @default(0) @db.Decimal(15, 2)
+  taxRate     Decimal @default(0) @map("tax_rate") @db.Decimal(5, 2)
+  lineTotal   Decimal @map("line_total") @db.Decimal(15, 2)
+  modifiers   Json    @default("[]")
+
+  order            POSOrder           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  kitchenOrderItems KitchenOrderItem[]
+
+  @@index([orderId])
+  @@map("pos_order_lines")
+  @@schema("pos")
+}
+
+model POSPayment {
+  id          String           @id @default(uuid()) @db.Uuid
+  orderId     String           @map("order_id") @db.Uuid
+  method      POSPaymentMethod
+  amount      Decimal          @db.Decimal(15, 2)
+  reference   String?          @db.VarChar(200)
+  processedAt DateTime         @map("processed_at")
+  status      POSPaymentStatus @default(PENDING)
+
+  order POSOrder @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+  @@map("pos_payments")
+  @@schema("pos")
+}
+
+model LoyaltyProgram {
+  id                    String   @id @default(uuid()) @db.Uuid
+  tenantId              String   @map("tenant_id") @db.Uuid
+  name                  String   @db.VarChar(200)
+  pointsPerCurrency     Decimal  @map("points_per_currency") @db.Decimal(10, 4)
+  pointsRedemptionRate  Decimal  @map("points_redemption_rate") @db.Decimal(10, 6)
+  minRedemption         Int      @map("min_redemption")
+  isActive              Boolean  @default(true) @map("is_active")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  @@index([tenantId])
+  @@index([tenantId, isActive])
+  @@map("loyalty_programs")
+  @@schema("pos")
+}
+
+model CustomerLoyalty {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  customerId     String   @map("customer_id") @db.Uuid
+  points         Int      @default(0)
+  lifetimePoints Int      @default(0) @map("lifetime_points")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, customerId])
+  @@index([tenantId])
+  @@index([tenantId, customerId])
+  @@map("customer_loyalty")
+  @@schema("pos")
+}
+
+// ── Restaurant POS ───────────────────────────────────────────────────────────
+
+model RestaurantTable {
+  id             String                @id @default(uuid()) @db.Uuid
+  tenantId       String                @map("tenant_id") @db.Uuid
+  tableNumber    String                @map("table_number") @db.VarChar(20)
+  section        String?               @db.VarChar(100)
+  capacity       Int
+  status         RestaurantTableStatus @default(AVAILABLE)
+  currentOrderId String?               @map("current_order_id") @db.Uuid
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+
+  kitchenOrders KitchenOrder[]
+
+  @@unique([tenantId, tableNumber])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("restaurant_tables")
+  @@schema("pos")
+}
+
+model KitchenOrder {
+  id           String             @id @default(uuid()) @db.Uuid
+  tenantId     String             @map("tenant_id") @db.Uuid
+  orderId      String             @map("order_id") @db.Uuid
+  tableId      String?            @map("table_id") @db.Uuid
+  ticketNumber String             @map("ticket_number") @db.VarChar(50)
+  status       KitchenOrderStatus @default(PENDING)
+  priority     Int                @default(0)
+  notes        String?            @db.Text
+  printedAt    DateTime?          @map("printed_at")
+  readyAt      DateTime?          @map("ready_at")
+  servedAt     DateTime?          @map("served_at")
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+
+  order  POSOrder           @relation(fields: [orderId], references: [id])
+  table  RestaurantTable?   @relation(fields: [tableId], references: [id])
+  items  KitchenOrderItem[]
+
+  @@unique([tenantId, ticketNumber])
+  @@index([tenantId])
+  @@index([tenantId, orderId])
+  @@index([tenantId, status])
+  @@map("kitchen_orders")
+  @@schema("pos")
+}
+
+model KitchenOrderItem {
+  id             String                 @id @default(uuid()) @db.Uuid
+  kitchenOrderId String                 @map("kitchen_order_id") @db.Uuid
+  orderLineId    String                 @map("order_line_id") @db.Uuid
+  productName    String                 @map("product_name") @db.VarChar(500)
+  quantity       Decimal                @db.Decimal(10, 3)
+  course         String?                @db.VarChar(50)
+  modifiers      Json                   @default("[]")
+  status         KitchenOrderItemStatus @default(PENDING)
+  doneAt         DateTime?              @map("done_at")
+
+  kitchenOrder KitchenOrder @relation(fields: [kitchenOrderId], references: [id], onDelete: Cascade)
+  orderLine    POSOrderLine @relation(fields: [orderLineId], references: [id])
+
+  @@index([kitchenOrderId])
+  @@index([orderLineId])
+  @@map("kitchen_order_items")
+  @@schema("pos")
+}

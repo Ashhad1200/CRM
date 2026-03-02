@@ -1,0 +1,417 @@
+// ── Asset Management Module Schema ───────────────────────────────────────────
+// Fixed assets: categories, assets, depreciation schedules,
+// maintenance records, disposal records, transfers, and audits.
+//
+// NOTE: The "assets" schema must be added to the schemas array in base.prisma:
+//   schemas = [..., "assets"]
+
+// ── Depreciation Method ──────────────────────────────────────────────────────
+
+enum DepreciationMethod {
+  STRAIGHT_LINE
+  DECLINING_BALANCE
+  UNITS_OF_PRODUCTION
+
+  @@schema("assets")
+}
+
+// ── Asset Status ─────────────────────────────────────────────────────────────
+
+enum AssetStatus {
+  ACTIVE
+  DISPOSED
+  UNDER_MAINTENANCE
+  FULLY_DEPRECIATED
+
+  @@schema("assets")
+}
+
+// ── Maintenance Type ─────────────────────────────────────────────────────────
+
+enum MaintenanceType {
+  PREVENTIVE
+  CORRECTIVE
+  INSPECTION
+
+  @@schema("assets")
+}
+
+// ── Maintenance Status ───────────────────────────────────────────────────────
+
+enum MaintenanceStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+
+  @@schema("assets")
+}
+
+// ── Disposal Method ──────────────────────────────────────────────────────────
+
+enum DisposalMethod {
+  SOLD
+  SCRAPPED
+  DONATED
+  WRITTEN_OFF
+
+  @@schema("assets")
+}
+
+// ── Asset Condition ─────────────────────────────────────────────────────────
+
+enum AssetCondition {
+  NEW
+  EXCELLENT
+  GOOD
+  FAIR
+  POOR
+
+  @@schema("assets")
+}
+
+// ── Assignment Type ─────────────────────────────────────────────────────────
+
+enum AssignmentType {
+  EMPLOYEE
+  DEPARTMENT
+  LOCATION
+
+  @@schema("assets")
+}
+
+// ── Maintenance Frequency ───────────────────────────────────────────────────
+
+enum MaintenanceFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  SEMI_ANNUAL
+  ANNUAL
+
+  @@schema("assets")
+}
+
+// ── Disposal Status ─────────────────────────────────────────────────────────
+
+enum DisposalStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  COMPLETED
+
+  @@schema("assets")
+}
+
+// ── Transfer Status ─────────────────────────────────────────────────────────
+
+enum TransferStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+
+  @@schema("assets")
+}
+
+// ── Audit Status ────────────────────────────────────────────────────────────
+
+enum AuditStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+
+  @@schema("assets")
+}
+
+// ── Audit Scope ─────────────────────────────────────────────────────────────
+
+enum AuditScope {
+  FULL
+  LOCATION
+  CATEGORY
+  DEPARTMENT
+
+  @@schema("assets")
+}
+
+// ── Asset Category ───────────────────────────────────────────────────────────
+
+model AssetCategory {
+  id                   String             @id @default(uuid()) @db.Uuid
+  tenantId             String             @map("tenant_id") @db.Uuid
+  name                 String             @db.VarChar(200)
+  description          String?            @db.Text
+  usefulLifeYears      Int                @map("useful_life_years")
+  salvageValuePercent  Decimal            @default(0) @map("salvage_value_percent") @db.Decimal(5, 2)
+  depreciationMethod   DepreciationMethod @map("depreciation_method")
+  glAccountId          String?            @map("gl_account_id") @db.Uuid
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  assets FixedAsset[]
+
+  @@index([tenantId])
+  @@map("asset_categories")
+  @@schema("assets")
+}
+
+// ── Fixed Asset ───────────────────────────────────────────────────────────────
+
+model FixedAsset {
+  id                  String             @id @default(uuid()) @db.Uuid
+  tenantId            String             @map("tenant_id") @db.Uuid
+  assetNumber         String             @map("asset_number") @db.VarChar(50)
+  name                String             @db.VarChar(255)
+  description         String?            @db.Text
+  categoryId          String             @map("category_id") @db.Uuid
+  serialNumber        String?            @map("serial_number") @db.VarChar(200)
+  purchaseDate        DateTime           @map("purchase_date") @db.Date
+  purchasePrice       Decimal            @map("purchase_price") @db.Decimal(15, 2)
+  currentBookValue    Decimal            @map("current_book_value") @db.Decimal(15, 2)
+  salvageValue        Decimal            @map("salvage_value") @db.Decimal(15, 2)
+  usefulLifeYears     Int                @map("useful_life_years")
+  depreciationMethod  DepreciationMethod @map("depreciation_method")
+  totalUnitsExpected  Decimal?           @map("total_units_expected") @db.Decimal(15, 4)
+  totalUnitsProduced  Decimal            @default(0) @map("total_units_produced") @db.Decimal(15, 4)
+  locationId          String?            @map("location_id") @db.VarChar(100)
+  departmentId        String?            @map("department_id") @db.Uuid
+  assignedTo          String?            @map("assigned_to") @db.Uuid
+  condition           AssetCondition     @default(NEW)
+  status              AssetStatus        @default(ACTIVE)
+  purchaseInvoiceId   String?            @map("purchase_invoice_id") @db.Uuid
+  notes               String?            @db.Text
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+  createdBy           String?            @map("created_by") @db.Uuid
+  version             Int                @default(1)
+
+  category             AssetCategory          @relation(fields: [categoryId], references: [id])
+  depreciationSchedule DepreciationSchedule[]
+  maintenance          AssetMaintenance[]
+  maintenanceSchedules MaintenanceSchedule[]
+  disposal             AssetDisposal?
+  transfers            AssetTransfer[]
+  auditLines           AssetAuditLine[]
+
+  @@unique([tenantId, assetNumber])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, categoryId])
+  @@map("fixed_assets")
+  @@schema("assets")
+}
+
+// ── Depreciation Schedule ─────────────────────────────────────────────────────
+
+model DepreciationSchedule {
+  id                 String   @id @default(uuid()) @db.Uuid
+  assetId            String   @map("asset_id") @db.Uuid
+  periodStart        DateTime @map("period_start") @db.Date
+  periodEnd          DateTime @map("period_end") @db.Date
+  openingValue       Decimal  @map("opening_value") @db.Decimal(15, 2)
+  depreciationCharge Decimal  @map("depreciation_charge") @db.Decimal(15, 2)
+  closingValue       Decimal  @map("closing_value") @db.Decimal(15, 2)
+  isPosted           Boolean  @default(false) @map("is_posted")
+  journalEntryId     String?  @map("journal_entry_id") @db.Uuid
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  asset FixedAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId])
+  @@index([assetId, isPosted])
+  @@map("depreciation_schedules")
+  @@schema("assets")
+}
+
+// ── Asset Maintenance ─────────────────────────────────────────────────────────
+
+model AssetMaintenance {
+  id             String            @id @default(uuid()) @db.Uuid
+  tenantId       String            @map("tenant_id") @db.Uuid
+  assetId        String            @map("asset_id") @db.Uuid
+  type           MaintenanceType
+  scheduledDate  DateTime          @map("scheduled_date") @db.Date
+  completedDate  DateTime?         @map("completed_date") @db.Date
+  cost           Decimal?          @db.Decimal(15, 2)
+  vendor         String?           @db.VarChar(255)
+  description    String            @db.Text
+  status         MaintenanceStatus @default(SCHEDULED)
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+  createdBy      String?           @map("created_by") @db.Uuid
+
+  asset FixedAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([assetId])
+  @@index([tenantId, status])
+  @@map("asset_maintenance")
+  @@schema("assets")
+}
+
+// ── Maintenance Schedule (Recurring) ─────────────────────────────────────────
+
+model MaintenanceSchedule {
+  id                String               @id @default(uuid()) @db.Uuid
+  tenantId          String               @map("tenant_id") @db.Uuid
+  assetId           String               @map("asset_id") @db.Uuid
+  name              String               @db.VarChar(200)
+  description       String?              @db.Text
+  maintenanceType   MaintenanceType      @map("maintenance_type")
+  frequency         MaintenanceFrequency
+  startDate         DateTime             @map("start_date") @db.Date
+  endDate           DateTime?            @map("end_date") @db.Date
+  lastScheduledDate DateTime?            @map("last_scheduled_date") @db.Date
+  nextScheduledDate DateTime?            @map("next_scheduled_date") @db.Date
+  estimatedCost     Decimal?             @map("estimated_cost") @db.Decimal(15, 2)
+  vendor            String?              @db.VarChar(255)
+  isActive          Boolean              @default(true) @map("is_active")
+  notes             String?              @db.Text
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
+  createdBy         String?              @map("created_by") @db.Uuid
+
+  asset FixedAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([assetId])
+  @@index([tenantId, nextScheduledDate])
+  @@map("maintenance_schedules")
+  @@schema("assets")
+}
+
+// ── Asset Transfer ───────────────────────────────────────────────────────────
+
+model AssetTransfer {
+  id               String         @id @default(uuid()) @db.Uuid
+  tenantId         String         @map("tenant_id") @db.Uuid
+  assetId          String         @map("asset_id") @db.Uuid
+  transferNumber   String         @map("transfer_number") @db.VarChar(50)
+  fromLocationId   String?        @map("from_location_id") @db.VarChar(100)
+  toLocationId     String?        @map("to_location_id") @db.VarChar(100)
+  fromDepartmentId String?        @map("from_department_id") @db.Uuid
+  toDepartmentId   String?        @map("to_department_id") @db.Uuid
+  fromAssignedTo   String?        @map("from_assigned_to") @db.Uuid
+  toAssignedTo     String?        @map("to_assigned_to") @db.Uuid
+  transferDate     DateTime       @map("transfer_date") @db.Date
+  effectiveDate    DateTime       @map("effective_date") @db.Date
+  reason           String?        @db.Text
+  status           TransferStatus @default(PENDING)
+  approvedBy       String?        @map("approved_by") @db.Uuid
+  approvedAt       DateTime?      @map("approved_at")
+  completedAt      DateTime?      @map("completed_at")
+  notes            String?        @db.Text
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+  createdBy        String?        @map("created_by") @db.Uuid
+
+  asset FixedAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, transferNumber])
+  @@index([tenantId])
+  @@index([assetId])
+  @@index([tenantId, status])
+  @@map("asset_transfers")
+  @@schema("assets")
+}
+
+// ── Asset Audit ──────────────────────────────────────────────────────────────
+
+model AssetAudit {
+  id              String      @id @default(uuid()) @db.Uuid
+  tenantId        String      @map("tenant_id") @db.Uuid
+  auditNumber     String      @map("audit_number") @db.VarChar(50)
+  name            String      @db.VarChar(200)
+  description     String?     @db.Text
+  scope           AuditScope  @default(FULL)
+  scopeFilter     Json?       @map("scope_filter")
+  scheduledDate   DateTime    @map("scheduled_date") @db.Date
+  startedAt       DateTime?   @map("started_at")
+  completedAt     DateTime?   @map("completed_at")
+  status          AuditStatus @default(SCHEDULED)
+  totalAssets     Int         @default(0) @map("total_assets")
+  assetsVerified  Int         @default(0) @map("assets_verified")
+  assetsMissing   Int         @default(0) @map("assets_missing")
+  assetsFound     Int         @default(0) @map("assets_found")
+  discrepancies   Int         @default(0)
+  findings        String?     @db.Text
+  recommendations String?     @db.Text
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+  createdBy       String?     @map("created_by") @db.Uuid
+  conductedBy     String?     @map("conducted_by") @db.Uuid
+
+  lines AssetAuditLine[]
+
+  @@unique([tenantId, auditNumber])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("asset_audits")
+  @@schema("assets")
+}
+
+// ── Asset Audit Line ─────────────────────────────────────────────────────────
+
+model AssetAuditLine {
+  id                String          @id @default(uuid()) @db.Uuid
+  auditId           String          @map("audit_id") @db.Uuid
+  assetId           String          @map("asset_id") @db.Uuid
+  expectedLocation  String?         @map("expected_location") @db.VarChar(100)
+  actualLocation    String?         @map("actual_location") @db.VarChar(100)
+  expectedCondition AssetCondition? @map("expected_condition")
+  actualCondition   AssetCondition? @map("actual_condition")
+  isVerified        Boolean         @default(false) @map("is_verified")
+  isDiscrepancy     Boolean         @default(false) @map("is_discrepancy")
+  discrepancyType   String?         @map("discrepancy_type") @db.VarChar(50)
+  notes             String?         @db.Text
+  verifiedAt        DateTime?       @map("verified_at")
+  verifiedBy        String?         @map("verified_by") @db.Uuid
+  createdAt         DateTime        @default(now()) @map("created_at")
+
+  audit AssetAudit @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  asset FixedAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([auditId, assetId])
+  @@index([auditId])
+  @@index([assetId])
+  @@map("asset_audit_lines")
+  @@schema("assets")
+}
+
+// ── Asset Disposal (Enhanced with approval workflow) ─────────────────────────
+
+model AssetDisposal {
+  id                  String         @id @default(uuid()) @db.Uuid
+  tenantId            String         @map("tenant_id") @db.Uuid
+  assetId             String         @unique @map("asset_id") @db.Uuid
+  disposalNumber      String         @map("disposal_number") @db.VarChar(50)
+  disposalDate        DateTime       @map("disposal_date") @db.Date
+  disposalMethod      DisposalMethod @map("disposal_method")
+  status              DisposalStatus @default(PENDING_APPROVAL)
+  bookValueAtDisposal Decimal        @map("book_value_at_disposal") @db.Decimal(15, 2)
+  proceedsAmount      Decimal        @default(0) @map("proceeds_amount") @db.Decimal(15, 2)
+  disposalCosts       Decimal        @default(0) @map("disposal_costs") @db.Decimal(15, 2)
+  gainLoss            Decimal        @map("gain_loss") @db.Decimal(15, 2)
+  buyerName           String?        @map("buyer_name") @db.VarChar(255)
+  buyerContact        String?        @map("buyer_contact") @db.VarChar(255)
+  invoiceId           String?        @map("invoice_id") @db.Uuid
+  reason              String?        @db.Text
+  notes               String?        @db.Text
+  approvedBy          String?        @map("approved_by") @db.Uuid
+  approvedAt          DateTime?      @map("approved_at")
+  journalEntryId      String?        @map("journal_entry_id") @db.Uuid
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
+  createdBy           String?        @map("created_by") @db.Uuid
+
+  asset FixedAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, disposalNumber])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("asset_disposals")
+  @@schema("assets")
+}

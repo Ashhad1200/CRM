@@ -26,8 +26,16 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
+          // Core React runtime - rarely changes
           vendor: ['react', 'react-dom', 'react-router'],
+          // Data fetching - changes with API updates
           query: ['@tanstack/react-query'],
+          // Internationalization - stable
+          i18n: ['i18next', 'react-i18next', 'i18next-browser-languagedetector'],
+          // State management - stable
+          state: ['zustand'],
+          // Real-time - stable
+          socket: ['socket.io-client'],
         },
       },
     },

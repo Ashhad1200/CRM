@@ -5,6 +5,7 @@ import { AuthProvider } from './providers/auth-provider';
 import { TenantProvider } from './providers/tenant-provider';
 import { RbacProvider } from './providers/rbac-provider';
 import { SocketProvider } from './providers/socket-provider';
+import { ThemeProvider } from '@softcrm/ui';
 import { AppRouter } from './router';
 import './lib/i18n'; // Initialize i18n before rendering
 import './index.css';
@@ -19,7 +20,9 @@ createRoot(root).render(
         <TenantProvider>
           <RbacProvider>
             <SocketProvider>
-              <AppRouter />
+              <ThemeProvider>
+                <AppRouter />
+              </ThemeProvider>
             </SocketProvider>
           </RbacProvider>
         </TenantProvider>

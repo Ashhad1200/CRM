@@ -1,0 +1,317 @@
+// ── Procurement Module Schema ─────────────────────────────────────────────────
+// Supplier management, purchase requisitions, RFQs, purchase orders,
+// and goods receipt with accounting and warehouse integration.
+
+// ── Supplier Status ──────────────────────────────────────────────────────────
+
+enum SupplierStatus {
+  ACTIVE
+  INACTIVE
+  BLACKLISTED
+
+  @@schema("procurement")
+}
+
+// ── Purchase Requisition Status ──────────────────────────────────────────────
+
+enum PurchaseRequisitionStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  PO_CREATED
+
+  @@schema("procurement")
+}
+
+// ── RFQ Status ───────────────────────────────────────────────────────────────
+
+enum RFQStatus {
+  DRAFT
+  SENT
+  RESPONSES_RECEIVED
+  CLOSED
+
+  @@schema("procurement")
+}
+
+// ── Procurement PO Status ────────────────────────────────────────────────────
+
+enum ProcurementPOStatus {
+  DRAFT
+  CONFIRMED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+
+  @@schema("procurement")
+}
+
+// ── Goods Receipt Status ─────────────────────────────────────────────────────
+
+enum GoodsReceiptStatus {
+  DRAFT
+  CONFIRMED
+
+  @@schema("procurement")
+}
+
+// ── Models ───────────────────────────────────────────────────────────────────
+
+model Supplier {
+  id           String         @id @db.VarChar(30)
+  tenantId     String         @map("tenant_id") @db.VarChar(30)
+  name         String         @db.VarChar(255)
+  code         String         @db.VarChar(100)
+  contactName  String?        @map("contact_name") @db.VarChar(255)
+  email        String?        @db.VarChar(255)
+  phone        String?        @db.VarChar(50)
+  website      String?        @db.VarChar(255)
+  address      Json?
+  paymentTerms String?        @map("payment_terms") @db.VarChar(255)
+  currency     Currency       @default(USD)
+  rating       Decimal?       @db.Decimal(3, 2)
+  status       SupplierStatus @default(ACTIVE)
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+  createdBy    String?        @map("created_by") @db.VarChar(30)
+  version      Int            @default(1)
+
+  // Relations
+  products       SupplierProduct[]
+  rfqSuppliers   RFQSupplier[]
+  purchaseOrders ProcurementPO[]
+  ratings        SupplierRating[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, status])
+  @@index([tenantId, name])
+  @@map("suppliers")
+  @@schema("procurement")
+}
+
+model SupplierProduct {
+  id             String   @id @db.VarChar(30)
+  supplierId     String   @map("supplier_id") @db.VarChar(30)
+  productId      String   @map("product_id") @db.Uuid
+  supplierSku    String?  @map("supplier_sku") @db.VarChar(100)
+  unitPrice      Decimal  @map("unit_price") @db.Decimal(15, 2)
+  minOrderQty    Decimal  @map("min_order_qty") @db.Decimal(15, 4)
+  leadTimeDays   Int      @map("lead_time_days")
+  isPreferred    Boolean  @default(false) @map("is_preferred")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+
+  @@unique([supplierId, productId])
+  @@index([supplierId])
+  @@map("supplier_products")
+  @@schema("procurement")
+}
+
+model PurchaseRequisition {
+  id            String                    @id @db.VarChar(30)
+  tenantId      String                    @map("tenant_id") @db.VarChar(30)
+  reqNumber     String                    @map("req_number") @db.VarChar(50)
+  requestedBy   String                    @map("requested_by") @db.Uuid
+  departmentId  String?                   @map("department_id") @db.Uuid
+  status        PurchaseRequisitionStatus @default(DRAFT)
+  approvedBy    String?                   @map("approved_by") @db.VarChar(30)
+  approvedAt    DateTime?                 @map("approved_at")
+  notes         String?                   @db.Text
+  createdAt     DateTime                  @default(now()) @map("created_at")
+  updatedAt     DateTime                  @updatedAt @map("updated_at")
+  version       Int                       @default(1)
+
+  // Relations
+  lines PurchaseRequisitionLine[]
+  rfqs  RFQ[]
+  pos   ProcurementPO[]
+
+  @@unique([tenantId, reqNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, requestedBy])
+  @@map("purchase_requisitions")
+  @@schema("procurement")
+}
+
+model PurchaseRequisitionLine {
+  id                 String   @id @db.VarChar(30)
+  requisitionId      String   @map("requisition_id") @db.VarChar(30)
+  productId          String   @map("product_id") @db.Uuid
+  description        String   @db.VarChar(500)
+  quantity           Decimal  @db.Decimal(15, 4)
+  estimatedUnitPrice Decimal  @map("estimated_unit_price") @db.Decimal(15, 2)
+  requiredByDate     DateTime @map("required_by_date")
+
+  // Relations
+  requisition PurchaseRequisition @relation(fields: [requisitionId], references: [id])
+
+  @@index([requisitionId])
+  @@map("purchase_requisition_lines")
+  @@schema("procurement")
+}
+
+model RFQ {
+  id            String    @id @db.VarChar(30)
+  tenantId      String    @map("tenant_id") @db.VarChar(30)
+  rfqNumber     String    @map("rfq_number") @db.VarChar(50)
+  requisitionId String?   @map("requisition_id") @db.VarChar(30)
+  status        RFQStatus @default(DRAFT)
+  validUntil    DateTime? @map("valid_until")
+  notes         String?   @db.Text
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  createdBy     String?   @map("created_by") @db.VarChar(30)
+
+  // Relations
+  requisition PurchaseRequisition? @relation(fields: [requisitionId], references: [id])
+  suppliers   RFQSupplier[]
+
+  @@unique([tenantId, rfqNumber])
+  @@index([tenantId, status])
+  @@map("rfqs")
+  @@schema("procurement")
+}
+
+model RFQSupplier {
+  id                    String    @id @db.VarChar(30)
+  rfqId                 String    @map("rfq_id") @db.VarChar(30)
+  supplierId            String    @map("supplier_id") @db.VarChar(30)
+  sentAt                DateTime? @map("sent_at")
+  responseReceivedAt    DateTime? @map("response_received_at")
+  quotedPrice           Decimal?  @map("quoted_price") @db.Decimal(15, 2)
+  quotedLeadTimeDays    Int?      @map("quoted_lead_time_days")
+  notes                 String?   @db.Text
+
+  // Relations
+  rfq      RFQ      @relation(fields: [rfqId], references: [id])
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+
+  @@unique([rfqId, supplierId])
+  @@index([rfqId])
+  @@index([supplierId])
+  @@map("rfq_suppliers")
+  @@schema("procurement")
+}
+
+model ProcurementPO {
+  id                 String              @id @db.VarChar(30)
+  tenantId           String              @map("tenant_id") @db.VarChar(30)
+  poNumber           String              @map("po_number") @db.VarChar(50)
+  supplierId         String              @map("supplier_id") @db.VarChar(30)
+  requisitionId      String?             @map("requisition_id") @db.VarChar(30)
+  status             ProcurementPOStatus @default(DRAFT)
+  currency           Currency            @default(USD)
+  subtotal           Decimal             @default(0) @db.Decimal(15, 2)
+  taxAmount          Decimal             @default(0) @map("tax_amount") @db.Decimal(15, 2)
+  total              Decimal             @default(0) @db.Decimal(15, 2)
+  expectedDeliveryDate DateTime?         @map("expected_delivery_date")
+  approvalStatus     ApprovalStatus      @default(PENDING) @map("approval_status")
+  approvedBy         String?             @map("approved_by") @db.VarChar(30)
+  approvedAt         DateTime?           @map("approved_at")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+  createdBy          String?             @map("created_by") @db.VarChar(30)
+  updatedBy          String?             @map("updated_by") @db.VarChar(30)
+  version            Int                 @default(1)
+
+  // Relations
+  supplier      Supplier             @relation(fields: [supplierId], references: [id])
+  requisition   PurchaseRequisition? @relation(fields: [requisitionId], references: [id])
+  lines         ProcurementPOLine[]
+  goodsReceipts GoodsReceipt[]
+
+  @@unique([tenantId, poNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, supplierId])
+  @@map("procurement_purchase_orders")
+  @@schema("procurement")
+}
+
+model ProcurementPOLine {
+  id          String  @id @db.VarChar(30)
+  poId        String  @map("po_id") @db.VarChar(30)
+  productId   String  @map("product_id") @db.Uuid
+  description String  @db.VarChar(500)
+  quantity    Decimal @db.Decimal(15, 4)
+  unitPrice   Decimal @map("unit_price") @db.Decimal(15, 2)
+  taxRate     Decimal @default(0) @map("tax_rate") @db.Decimal(5, 4)
+  lineTotal   Decimal @map("line_total") @db.Decimal(15, 2)
+  receivedQty Decimal @default(0) @map("received_qty") @db.Decimal(15, 4)
+
+  // Relations
+  po                 ProcurementPO         @relation(fields: [poId], references: [id])
+  goodsReceiptLines  GoodsReceiptLine[]
+
+  @@index([poId])
+  @@map("procurement_po_lines")
+  @@schema("procurement")
+}
+
+model GoodsReceipt {
+  id            String             @id @db.VarChar(30)
+  tenantId      String             @map("tenant_id") @db.VarChar(30)
+  poId          String             @map("po_id") @db.VarChar(30)
+  receiptNumber String             @map("receipt_number") @db.VarChar(50)
+  receivedBy    String             @map("received_by") @db.VarChar(30)
+  receivedAt    DateTime           @map("received_at")
+  warehouseId   String?            @map("warehouse_id") @db.Uuid
+  notes         String?            @db.Text
+  status        GoodsReceiptStatus @default(DRAFT)
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
+  createdBy     String?            @map("created_by") @db.VarChar(30)
+
+  // Relations
+  po    ProcurementPO      @relation(fields: [poId], references: [id])
+  lines GoodsReceiptLine[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, poId])
+  @@map("goods_receipts")
+  @@schema("procurement")
+}
+
+model GoodsReceiptLine {
+  id          String   @id @db.VarChar(30)
+  receiptId   String   @map("receipt_id") @db.VarChar(30)
+  poLineId    String   @map("po_line_id") @db.VarChar(30)
+  productId   String   @map("product_id") @db.Uuid
+  receivedQty Decimal  @map("received_qty") @db.Decimal(15, 4)
+  lotNumber   String?  @map("lot_number") @db.VarChar(100)
+  notes       String?  @db.Text
+
+  // Relations
+  receipt GoodsReceipt      @relation(fields: [receiptId], references: [id])
+  poLine  ProcurementPOLine @relation(fields: [poLineId], references: [id])
+
+  @@index([receiptId])
+  @@index([poLineId])
+  @@map("goods_receipt_lines")
+  @@schema("procurement")
+}
+
+// ── Supplier Rating ─────────────────────────────────────────────────────────
+
+model SupplierRating {
+  id              String   @id @db.VarChar(30)
+  tenantId        String   @map("tenant_id") @db.VarChar(30)
+  supplierId      String   @map("supplier_id") @db.VarChar(30)
+  poId            String?  @map("po_id") @db.VarChar(30)
+  qualityScore    Decimal  @map("quality_score") @db.Decimal(3, 2)
+  deliveryScore   Decimal  @map("delivery_score") @db.Decimal(3, 2)
+  priceScore      Decimal  @map("price_score") @db.Decimal(3, 2)
+  overallScore    Decimal  @map("overall_score") @db.Decimal(3, 2)
+  comments        String?  @db.Text
+  ratedBy         String   @map("rated_by") @db.VarChar(30)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  supplier        Supplier @relation(fields: [supplierId], references: [id])
+
+  @@index([tenantId, supplierId])
+  @@map("supplier_ratings")
+  @@schema("procurement")
+}

@@ -1,7 +1,8 @@
 @import "tailwindcss";
 
-/* SoftCRM custom theme overrides */
+/* ── SoftBusiness Custom Theme ──────────────────────────────────────────────── */
 @theme {
+  /* Brand palette */
   --color-brand-50: #eff6ff;
   --color-brand-100: #dbeafe;
   --color-brand-200: #bfdbfe;
@@ -14,6 +15,7 @@
   --color-brand-900: #1e3a8a;
   --color-brand-950: #172554;
 
+  /* Semantic colors */
   --color-success-50: #f0fdf4;
   --color-success-500: #22c55e;
   --color-success-600: #16a34a;
@@ -24,11 +26,132 @@
   --color-warning-500: #f59e0b;
   --color-warning-600: #d97706;
 
+  /* Typography */
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Glass keyframe animations */
+  --animate-fade-in: fade-in 250ms ease forwards;
+  --animate-fade-out: fade-out 200ms ease forwards;
+  --animate-slide-in-bottom: slide-in-bottom 300ms cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+  --animate-slide-in-right: slide-in-right 300ms cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+  --animate-scale-in: scale-in 200ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  --animate-scale-out: scale-out 150ms ease forwards;
+  --animate-shimmer: shimmer 2s linear infinite;
+  --animate-pulse-glow: pulse-glow 2s ease-in-out infinite;
+  --animate-float: float 3s ease-in-out infinite;
 }
 
+/* ── Glassmorphism CSS Custom Properties ────────────────────────────────────── */
+:root {
+  /* Glass surface defaults (overridden by ThemeProvider) */
+  --glass-opacity: 0.1875;
+  --glass-blur: 18px;
+  --glass-border-opacity: 0.75;
+
+  /* Module accent (set per-page via data attribute or JS) */
+  --accent-from: #3b82f6;
+  --accent-to: #6366f1;
+  --accent-glow: rgba(59, 130, 246, 0.15);
+  --accent-rgb: 59, 130, 246;
+}
+
+/* ── Keyframes ──────────────────────────────────────────────────────────────── */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes slide-in-bottom {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes slide-in-right {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes slide-in-top {
+  from { transform: translateY(-16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes scale-in {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes scale-out {
+  from { transform: scale(1); opacity: 1; }
+  to { transform: scale(0.95); opacity: 0; }
+}
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.2); }
+  50% { box-shadow: 0 0 20px rgba(var(--accent-rgb), 0.4); }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+/* ── Glass Utility Classes ──────────────────────────────────────────────────── */
+@utility glass-1 {
+  background: rgba(255, 255, 255, calc(var(--glass-opacity) * 0.32));
+  backdrop-filter: blur(calc(var(--glass-blur) * 0.33));
+  border: 1px solid rgba(255, 255, 255, calc(var(--glass-border-opacity) * 0.1));
+}
+@utility glass-2 {
+  background: rgba(255, 255, 255, calc(var(--glass-opacity) * 0.6));
+  backdrop-filter: blur(calc(var(--glass-blur) * 0.67));
+  border: 1px solid rgba(255, 255, 255, calc(var(--glass-border-opacity) * 0.18));
+}
+@utility glass-3 {
+  background: rgba(255, 255, 255, var(--glass-opacity));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid rgba(255, 255, 255, calc(var(--glass-border-opacity) * 0.25));
+}
+
+/* Dark mode glass surfaces */
+.dark .glass-1 {
+  background: rgba(255, 255, 255, calc(var(--glass-opacity) * 0.16));
+  border-color: rgba(255, 255, 255, calc(var(--glass-border-opacity) * 0.06));
+}
+.dark .glass-2 {
+  background: rgba(255, 255, 255, calc(var(--glass-opacity) * 0.32));
+  border-color: rgba(255, 255, 255, calc(var(--glass-border-opacity) * 0.1));
+}
+.dark .glass-3 {
+  background: rgba(255, 255, 255, calc(var(--glass-opacity) * 0.48));
+  border-color: rgba(255, 255, 255, calc(var(--glass-border-opacity) * 0.15));
+}
+
+/* Module accent gradient utility */
+@utility accent-gradient {
+  background: linear-gradient(135deg, var(--accent-from), var(--accent-to));
+}
+@utility accent-glow {
+  box-shadow: 0 0 20px var(--accent-glow), 0 0 40px rgba(var(--accent-rgb), 0.08);
+}
+
+/* Mesh gradient page background */
+@utility mesh-bg {
+  background-image:
+    radial-gradient(ellipse at 20% 50%, rgba(var(--accent-rgb), 0.06), transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(139, 92, 246, 0.04), transparent 50%),
+    radial-gradient(ellipse at 50% 80%, rgba(16, 185, 129, 0.04), transparent 50%);
+}
+
+/* ── Base Styles ────────────────────────────────────────────────────────────── */
 body {
-  @apply bg-white text-gray-900 antialiased;
+  @apply bg-slate-50 text-gray-900 antialiased;
   font-family: var(--font-sans);
+  transition: background-color 250ms ease, color 250ms ease;
+}
+
+.dark body {
+  @apply bg-slate-950 text-slate-100;
 }

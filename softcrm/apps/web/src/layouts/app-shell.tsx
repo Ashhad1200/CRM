@@ -1,36 +1,32 @@
-import { useState, type ReactNode } from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router';
+import { useState } from 'react';
+import { Outlet, useNavigate } from 'react-router';
 import { useAuth } from '../providers/auth-provider';
-import { useRbac } from '../providers/rbac-provider';
+import { useCommandPalette } from '../providers/command-palette-provider';
+import { useNotifications } from '../providers/notification-provider';
+import { useBreadcrumb } from '../hooks/use-breadcrumb';
+import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
+import { useTheme, cn, SearchInput, NotificationPanel, Badge, Breadcrumb } from '@softcrm/ui';
+import { SidebarNav } from './sidebar-nav';
+import type { Theme } from '@softcrm/ui';
 
-interface NavItem {
-  label: string;
-  path: string;
-  module: string;
-  icon: string;
-}
-
-const NAV_ITEMS: NavItem[] = [
-  { label: 'Pipeline', path: '/sales', module: 'sales', icon: '💼' },
-  { label: 'Accounting', path: '/accounting', module: 'accounting', icon: '📊' },
-  { label: 'Support', path: '/support', module: 'support', icon: '🎧' },
-  { label: 'Marketing', path: '/marketing', module: 'marketing', icon: '📣' },
-  { label: 'Inventory', path: '/inventory', module: 'inventory', icon: '📦' },
-  { label: 'Projects', path: '/projects', module: 'projects', icon: '📋' },
-  { label: 'Analytics', path: '/analytics', module: 'analytics', icon: '📈' },
-  { label: 'Admin', path: '/admin', module: 'platform', icon: '⚙️' },
-];
+const THEME_CYCLE: Theme[] = ['light', 'dark', 'system'];
 
 export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const { user, logout } = useAuth();
-  const { permissions } = useRbac();
   const navigate = useNavigate();
+  const commandPalette = useCommandPalette();
+  const notifications = useNotifications();
+  const breadcrumbItems = useBreadcrumb();
+  const { theme, resolvedTheme, setTheme } = useTheme();
 
-  const visibleItems = NAV_ITEMS.filter((item) => {
-    const mod = permissions[item.module];
-    return mod && mod.access !== 'none';
-  });
+  // Initialize global keyboard shortcuts
+  useKeyboardShortcuts();
+
+  const cycleTheme = () => {
+    const idx = THEME_CYCLE.indexOf(theme);
+    setTheme(THEME_CYCLE[(idx + 1) % THEME_CYCLE.length]!);
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -38,61 +34,87 @@ export function AppShell() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-slate-50 dark:bg-slate-950 mesh-bg">
       {/* Sidebar */}
       <aside
-        className={`${
-          sidebarOpen ? 'w-60' : 'w-16'
-        } flex flex-col border-r border-gray-200 bg-white transition-all duration-200`}
+        className={cn(
+          'flex flex-col glass-3 backdrop-blur-xl border-r border-white/10 transition-all duration-200',
+          sidebarOpen ? 'w-60' : 'w-16',
+        )}
       >
-        <div className="flex h-14 items-center justify-between px-4">
+        <div className="flex h-14 items-center justify-between px-4 border-b border-white/10">
           {sidebarOpen && (
-            <span className="text-lg font-bold text-brand-600">SoftCRM</span>
+            <span className="text-lg font-bold accent-gradient bg-clip-text text-transparent">
+              SoftBusiness
+            </span>
           )}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="rounded p-1 hover:bg-gray-100"
+            className="rounded p-1 hover:bg-gray-100 dark:hover:bg-white/10"
             aria-label="Toggle sidebar"
           >
             {sidebarOpen ? '◀' : '▶'}
           </button>
         </div>
 
-        <nav className="flex-1 space-y-1 px-2 py-4">
-          {visibleItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-brand-50 text-brand-700'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                }`
-              }
-            >
-              <span>{item.icon}</span>
-              {sidebarOpen && <span>{item.label}</span>}
-            </NavLink>
-          ))}
-        </nav>
+        <SidebarNav collapsed={!sidebarOpen} />
       </aside>
 
-      {/* Main area */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top nav */}
-        <header className="flex h-14 items-center justify-between border-b border-gray-200 bg-white px-6">
+        <header className="flex h-14 items-center justify-between glass-2 backdrop-blur-xl border-b border-white/10 px-6 sticky top-0 z-30">
           <div className="flex items-center gap-4">
-            <h1 className="text-sm font-medium text-gray-500">Dashboard</h1>
+            <Breadcrumb
+              items={breadcrumbItems}
+              onNavigate={(href) => navigate(href)}
+              maxItems={5}
+            />
           </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">{user?.name ?? user?.email}</span>
+          <div className="flex items-center gap-3">
+            <SearchInput
+              onSearch={() => {}}
+              placeholder="Search..."
+              shortcut="⌘K"
+              onShortcutClick={() => commandPalette.open()}
+              className="w-64"
+              data-search-input
+            />
+
             <button
-              onClick={() => void handleLogout()}
-              className="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
+              onClick={cycleTheme}
+              className="glass-1 rounded-lg p-2 hover:glass-2"
+              aria-label="Toggle theme"
             >
-              Logout
+              {resolvedTheme === 'dark' ? '🌙' : '☀️'}
             </button>
+
+            <button
+              onClick={notifications.togglePanel}
+              className="relative glass-1 rounded-lg p-2 hover:glass-2"
+              aria-label="Notifications"
+            >
+              🔔
+              {notifications.unreadCount > 0 && (
+                <Badge
+                  variant="danger"
+                  className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
+                >
+                  {notifications.unreadCount}
+                </Badge>
+              )}
+            </button>
+
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-neutral-600 dark:text-neutral-300">
+                {user?.name}
+              </span>
+              <button
+                onClick={() => void handleLogout()}
+                className="glass-1 rounded-lg px-3 py-1.5 text-sm hover:glass-2"
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </header>
 
@@ -101,6 +123,17 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+
+      {/* Notification Panel */}
+      <NotificationPanel
+        open={notifications.isPanelOpen}
+        onOpenChange={notifications.setPanelOpen}
+        notifications={notifications.notifications}
+        onMarkRead={notifications.markRead}
+        onMarkAllRead={notifications.markAllRead}
+        onDismiss={notifications.dismiss}
+        onClearAll={notifications.clearAll}
+      />
     </div>
   );
 }

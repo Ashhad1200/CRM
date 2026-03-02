@@ -1,0 +1,220 @@
+// ── Quality Control Module Schema ───────────────────────────────────────────────
+// Inspection templates, inspections, non-conformance reports, and corrective actions.
+
+// ── Enums ──────────────────────────────────────────────────────────────────────
+
+enum InspectionType {
+  INCOMING
+  IN_PROCESS
+  FINAL
+  SUPPLIER
+
+  @@schema("quality")
+}
+
+enum ChecklistItemType {
+  PASS_FAIL
+  NUMERIC
+  TEXT
+
+  @@schema("quality")
+}
+
+enum InspectionStatus {
+  PENDING
+  IN_PROGRESS
+  PASSED
+  FAILED
+  WAIVED
+
+  @@schema("quality")
+}
+
+enum InspectionResult {
+  PASS
+  FAIL
+  CONDITIONAL
+
+  @@schema("quality")
+}
+
+enum NcrSeverity {
+  MINOR
+  MAJOR
+  CRITICAL
+
+  @@schema("quality")
+}
+
+enum NcrStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  CLOSED
+
+  @@schema("quality")
+}
+
+enum CorrectiveActionType {
+  CORRECTIVE
+  PREVENTIVE
+
+  @@schema("quality")
+}
+
+enum CorrectiveActionStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  VERIFIED
+  OVERDUE
+
+  @@schema("quality")
+}
+
+// ── Models ─────────────────────────────────────────────────────────────────────
+
+model InspectionTemplate {
+  id             String         @id @default(uuid())
+  tenantId       String
+  name           String
+  type           InspectionType
+  description    String?
+  checklistItems Json           @default("[]")
+  isActive       Boolean        @default(true)
+  createdBy      String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  inspections Inspection[]
+
+  @@index([tenantId, type])
+  @@index([tenantId, isActive])
+  @@schema("quality")
+}
+
+model Inspection {
+  id              String           @id @default(uuid())
+  tenantId        String
+  templateId      String
+  inspectionNumber String
+  type            InspectionType
+  referenceId     String?
+  referenceType   String?
+  productId       String?
+  lotNumber       String?
+  batchSize       Int?
+  sampledUnits    Int?
+  status          InspectionStatus @default(PENDING)
+  inspectorId     String
+  scheduledDate   DateTime
+  conductedDate   DateTime?
+  overallResult   InspectionResult?
+  notes           String?
+  createdBy       String
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  version         Int              @default(1)
+
+  template InspectionTemplate   @relation(fields: [templateId], references: [id])
+  results  InspectionResultItem[]
+  ncrs     NonConformanceReport[]
+
+  @@unique([tenantId, inspectionNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, type])
+  @@index([tenantId, productId])
+  @@index([tenantId, inspectorId])
+  @@schema("quality")
+}
+
+model InspectionResultItem {
+  id              String            @id @default(uuid())
+  inspectionId    String
+  checklistItemId String
+  question        String
+  resultType      ChecklistItemType
+  passFail        Boolean?
+  numericValue    Decimal?
+  textValue       String?
+  isPassing       Boolean
+  notes           String?
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  @@index([inspectionId])
+  @@schema("quality")
+}
+
+model NonConformanceReport {
+  id              String      @id @default(uuid())
+  tenantId        String
+  ncrNumber       String
+  inspectionId    String?
+  title           String
+  description     String
+  severity        NcrSeverity
+  productId       String?
+  supplierId      String?
+  status          NcrStatus   @default(OPEN)
+  rootCause       String?
+  immediateAction String?
+  detectedBy      String
+  detectedAt      DateTime
+  closedAt        DateTime?
+  closedBy        String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  version         Int         @default(1)
+
+  inspection        Inspection?       @relation(fields: [inspectionId], references: [id])
+  correctiveActions CorrectiveAction[]
+
+  @@unique([tenantId, ncrNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, severity])
+  @@index([tenantId, supplierId])
+  @@index([tenantId, productId])
+  @@schema("quality")
+}
+
+model CorrectiveAction {
+  id            String                 @id @default(uuid())
+  tenantId      String
+  ncrId         String
+  actionType    CorrectiveActionType
+  description   String
+  assignedTo    String
+  dueDate       DateTime
+  completedDate DateTime?
+  status        CorrectiveActionStatus @default(OPEN)
+  verifiedBy    String?
+  verifiedAt    DateTime?
+  createdBy     String
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  ncr NonConformanceReport @relation(fields: [ncrId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@index([tenantId, ncrId])
+  @@index([tenantId, assignedTo])
+  @@index([tenantId, dueDate])
+  @@schema("quality")
+}
+
+model SupplierQualityScore {
+  id                 String   @id @default(uuid())
+  tenantId           String
+  supplierId         String
+  period             String
+  totalInspections   Int      @default(0)
+  passedInspections  Int      @default(0)
+  qualityScore       Decimal  @default(0)
+  ncrCount           Int      @default(0)
+  calculatedAt       DateTime @default(now())
+
+  @@unique([tenantId, supplierId, period])
+  @@index([tenantId, supplierId])
+  @@schema("quality")
+}

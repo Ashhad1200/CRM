@@ -10,7 +10,7 @@ function isPrismaKnownRequestError(
     err instanceof Error &&
     'code' in err &&
     typeof (err as Record<string, unknown>)['code'] === 'string' &&
-    (err as Record<string, unknown>)['code']?.toString().startsWith('P')
+    Boolean((err as Record<string, unknown>)['code']?.toString().startsWith('P'))
   );
 }
 
@@ -94,7 +94,8 @@ export function errorHandler(
   }
 
   // Unknown errors → 500
-  logger.error({ err, requestId }, `Unhandled error: ${err.message}`);
+  const errorMessage = (err as Error).message ?? String(err);
+  logger.error({ err, requestId }, `Unhandled error: ${errorMessage}`);
 
   res.status(500).json({
     error: {

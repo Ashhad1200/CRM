@@ -52,10 +52,12 @@ model User {
   updatedBy     String?  @map("updated_by") @db.Uuid
   version       Int      @default(1)
 
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  userRoles     UserRole[]
-  userTeams     UserTeam[]
-  refreshTokens RefreshToken[]
+  tenant                  Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userRoles               UserRole[]
+  userTeams               UserTeam[]
+  refreshTokens           RefreshToken[]
+  notifications           Notification[]         @relation("UserNotifications")
+  notificationPreferences NotificationPreference[] @relation("UserNotificationPreferences")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -369,6 +371,82 @@ enum WorkflowExecStatus {
   COMPLETED
   FAILED
 
+  @@schema("platform")
+}
+
+// ── Notification ───────────────────────────────────────────────────────────────
+
+model Notification {
+  id          String               @id @default(uuid()) @db.Uuid
+  tenantId    String               @map("tenant_id") @db.Uuid
+  userId      String               @map("user_id") @db.Uuid
+  type        NotificationType
+  category    NotificationCategory @default(GENERAL)
+  title       String               @db.VarChar(255)
+  body        String               @db.VarChar(1000)
+  metadata    Json?                @default("{}")
+  entityType  String?              @map("entity_type") @db.VarChar(50)
+  entityId    String?              @map("entity_id") @db.Uuid
+  actionUrl   String?              @map("action_url") @db.VarChar(500)
+  isRead      Boolean              @default(false) @map("is_read")
+  readAt      DateTime?            @map("read_at")
+  createdAt   DateTime             @default(now()) @map("created_at")
+
+  user        User                 @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId, isRead])
+  @@index([tenantId, userId, createdAt])
+  @@index([tenantId, userId, category])
+  @@map("notifications")
+  @@schema("platform")
+}
+
+enum NotificationType {
+  DEAL_WON
+  DEAL_LOST
+  TICKET_ASSIGNED
+  TICKET_OVERDUE
+  INVOICE_OVERDUE
+  APPROVAL_REQUIRED
+  LEAVE_REQUEST
+  PAYROLL_APPROVED
+  SYSTEM
+  MENTION
+
+  @@schema("platform")
+}
+
+enum NotificationCategory {
+  SALES
+  SUPPORT
+  BILLING
+  HR
+  INVENTORY
+  PROJECTS
+  SYSTEM
+  GENERAL
+
+  @@schema("platform")
+}
+
+// ── Notification Preference ─────────────────────────────────────────────────────
+
+model NotificationPreference {
+  id        String               @id @default(uuid()) @db.Uuid
+  tenantId  String               @map("tenant_id") @db.Uuid
+  userId    String               @map("user_id") @db.Uuid
+  category  NotificationCategory
+  inApp     Boolean              @default(true) @map("in_app")
+  email     Boolean              @default(true)
+  push      Boolean              @default(false)
+  createdAt DateTime             @default(now()) @map("created_at")
+  updatedAt DateTime             @updatedAt @map("updated_at")
+
+  user      User                 @relation("UserNotificationPreferences", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId, category], name: "tenantId_userId_category")
+  @@index([tenantId, userId])
+  @@map("notification_preferences")
   @@schema("platform")
 }
 

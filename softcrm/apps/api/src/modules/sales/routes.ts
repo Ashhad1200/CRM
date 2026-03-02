@@ -450,3 +450,149 @@ salesRouter.get(
     res.json({ data: pipeline });
   }),
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── Gamification ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+salesRouter.get(
+  '/gamification/leaderboard',
+  requirePermission({ module: 'sales', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const period = (req.query['period'] as string) ?? 'MONTHLY';
+    const now = new Date();
+    const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const { getLeaderboard } = await import('./gamification.service.js');
+    const entries = await getLeaderboard(tenantId, period, periodStart);
+    res.json({ data: entries });
+  }),
+);
+
+salesRouter.post(
+  '/gamification/leaderboard/calculate',
+  requirePermission({ module: 'sales', action: 'update' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const period = (req.body.period as string) ?? 'MONTHLY';
+    const periodStart = req.body.periodStart ? new Date(req.body.periodStart) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const { calculateLeaderboard } = await import('./gamification.service.js');
+    const entries = await calculateLeaderboard(tenantId, period, periodStart);
+    res.json({ data: entries });
+  }),
+);
+
+salesRouter.get(
+  '/gamification/targets',
+  requirePermission({ module: 'sales', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const userId = req.query['userId'] as string | undefined;
+    const { getTargets } = await import('./gamification.service.js');
+    const targets = await getTargets(tenantId, userId);
+    res.json({ data: targets });
+  }),
+);
+
+salesRouter.post(
+  '/gamification/targets',
+  requirePermission({ module: 'sales', action: 'create' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const { createTarget } = await import('./gamification.service.js');
+    const target = await createTarget(tenantId, req.body);
+    res.status(201).json({ data: target });
+  }),
+);
+
+salesRouter.get(
+  '/gamification/badges/:userId',
+  requirePermission({ module: 'sales', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const userId = param(req, 'userId');
+    const { getUserBadges } = await import('./gamification.service.js');
+    const badges = await getUserBadges(tenantId, userId);
+    res.json({ data: badges });
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── Lead Scoring ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+salesRouter.post(
+  '/lead-scoring/score/:id',
+  requirePermission({ module: 'sales', entity: 'lead', action: 'update' }),
+  validate({ params: uuidParamSchema }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const id = param(req, 'id');
+    const { scoreLead } = await import('./lead-scoring.service.js');
+    const breakdown = await scoreLead(tenantId, id);
+    res.json({ data: breakdown });
+  }),
+);
+
+salesRouter.post(
+  '/lead-scoring/rescore',
+  requirePermission({ module: 'sales', entity: 'lead', action: 'update' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const { rescoreAllLeads } = await import('./lead-scoring.service.js');
+    const updated = await rescoreAllLeads(tenantId);
+    res.json({ data: { updated } });
+  }),
+);
+
+salesRouter.get(
+  '/lead-scoring/distribution',
+  requirePermission({ module: 'sales', entity: 'lead', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const { getLeadScoreDistribution } = await import('./lead-scoring.service.js');
+    const distribution = await getLeadScoreDistribution(tenantId);
+    res.json({ data: distribution });
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── Social Selling ───────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+salesRouter.get(
+  '/social/:contactId',
+  requirePermission({ module: 'sales', entity: 'contact', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const contactId = param(req, 'contactId');
+    const { getContactSocialProfiles } = await import('./social.service.js');
+    const profiles = await getContactSocialProfiles(tenantId, contactId);
+    res.json({ data: profiles });
+  }),
+);
+
+salesRouter.post(
+  '/social/:contactId',
+  requirePermission({ module: 'sales', entity: 'contact', action: 'update' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const contactId = param(req, 'contactId');
+    const { platform, profileUrl, profileData } = req.body;
+    const { upsertSocialProfile } = await import('./social.service.js');
+    const profile = await upsertSocialProfile(tenantId, contactId, platform, profileUrl, profileData);
+    res.json({ data: profile });
+  }),
+);
+
+salesRouter.get(
+  '/social/:contactId/score',
+  requirePermission({ module: 'sales', entity: 'contact', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const contactId = param(req, 'contactId');
+    const { getSocialTouchScore } = await import('./social.service.js');
+    const score = await getSocialTouchScore(tenantId, contactId);
+    res.json({ data: score });
+  }),
+);

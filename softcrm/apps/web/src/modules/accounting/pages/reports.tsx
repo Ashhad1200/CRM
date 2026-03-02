@@ -5,15 +5,38 @@ import {
   useTrialBalance,
   useArAging,
 } from '../api.js';
+import { useCompanies, useCostCenterReport } from '../api-enhanced.js';
 
-type ReportTab = 'pl' | 'bs' | 'tb' | 'ar';
+type ReportTab = 'pl' | 'bs' | 'tb' | 'ar' | 'cc';
 
 const TABS: { key: ReportTab; label: string }[] = [
   { key: 'pl', label: 'Profit & Loss' },
   { key: 'bs', label: 'Balance Sheet' },
   { key: 'tb', label: 'Trial Balance' },
   { key: 'ar', label: 'AR Aging' },
+  { key: 'cc', label: 'Cost Center' },
 ];
+
+/* ───────── Company Filter ───────── */
+
+function CompanyFilter({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { data: companies } = useCompanies();
+  return (
+    <div>
+      <label className="mb-1 block text-xs font-medium text-gray-700">Company</label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+      >
+        <option value="">All Companies</option>
+        {(companies ?? []).map((c) => (
+          <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
+        ))}
+      </select>
+    </div>
+  );
+}
 
 /* ───────── Profit & Loss ───────── */
 
@@ -22,12 +45,14 @@ function ProfitLossPanel() {
   const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
   const [startDate, setStartDate] = useState(firstOfMonth);
   const [endDate, setEndDate] = useState(today.toISOString().slice(0, 10));
+  const [companyId, setCompanyId] = useState('');
   const { data, isLoading, isError, error } = useProfitLoss(startDate, endDate);
   const report = data?.data;
 
   return (
     <div>
       <div className="mb-4 flex gap-3">
+        <CompanyFilter value={companyId} onChange={setCompanyId} />
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-700">Start Date</label>
           <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)}
@@ -97,6 +122,7 @@ function ProfitLossPanel() {
 
 function BalanceSheetPanel() {
   const [asOfDate, setAsOfDate] = useState(new Date().toISOString().slice(0, 10));
+  const [companyId, setCompanyId] = useState('');
   const { data, isLoading, isError, error } = useBalanceSheet(asOfDate);
   const report = data?.data;
 
@@ -122,10 +148,13 @@ function BalanceSheetPanel() {
 
   return (
     <div>
-      <div className="mb-4">
-        <label className="mb-1 block text-xs font-medium text-gray-700">As of Date</label>
-        <input type="date" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)}
-          className="rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
+      <div className="mb-4 flex gap-3">
+        <CompanyFilter value={companyId} onChange={setCompanyId} />
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-700">As of Date</label>
+          <input type="date" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)}
+            className="rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
+        </div>
       </div>
 
       {isLoading && <p className="text-gray-500">Loading…</p>}
@@ -310,6 +339,81 @@ function ArAgingPanel() {
   );
 }
 
+/* ───────── Cost Center Breakdown ───────── */
+
+function CostCenterPanel() {
+  const today = new Date();
+  const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
+  const [companyId, setCompanyId] = useState('');
+  const [startDate, setStartDate] = useState(firstOfMonth);
+  const [endDate, setEndDate] = useState(today.toISOString().slice(0, 10));
+  const { data, isLoading, isError, error } = useCostCenterReport(
+    companyId || undefined,
+    startDate || undefined,
+    endDate || undefined,
+  );
+
+  const rows = data ?? [];
+  const totalNet = rows.reduce((s, r) => s + Number(r.netAmount), 0);
+
+  return (
+    <div>
+      <div className="mb-4 flex gap-3">
+        <CompanyFilter value={companyId} onChange={setCompanyId} />
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-700">Start Date</label>
+          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)}
+            className="rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-gray-700">End Date</label>
+          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)}
+            className="rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none" />
+        </div>
+      </div>
+
+      {!companyId && <p className="text-sm text-gray-400">Select a company to view cost center breakdown.</p>}
+      {isLoading && <p className="text-gray-500">Loading…</p>}
+      {isError && <p className="text-red-600">{error.message}</p>}
+
+      {rows.length > 0 && (
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-200 text-xs font-semibold uppercase text-gray-500">
+              <th className="px-3 py-2 text-left">Code</th>
+              <th className="px-3 py-2 text-left">Cost Center</th>
+              <th className="px-3 py-2 text-right">Total Debit</th>
+              <th className="px-3 py-2 text-right">Total Credit</th>
+              <th className="px-3 py-2 text-right">Net Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.costCenterId} className="border-b border-gray-100">
+                <td className="px-3 py-2 font-mono text-gray-600">{row.code}</td>
+                <td className="px-3 py-2 text-gray-900">{row.name}</td>
+                <td className="px-3 py-2 text-right">{Number(row.totalDebit).toFixed(2)}</td>
+                <td className="px-3 py-2 text-right">{Number(row.totalCredit).toFixed(2)}</td>
+                <td className={`px-3 py-2 text-right font-medium ${Number(row.netAmount) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                  {Number(row.netAmount).toFixed(2)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t font-semibold">
+              <td colSpan={4} className="px-3 py-2 text-gray-700">Total</td>
+              <td className={`px-3 py-2 text-right ${totalNet >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                {totalNet.toFixed(2)}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      )}
+    </div>
+  );
+}
+
 /* ───────── Reports Page ───────── */
 
 export default function ReportsPage() {
@@ -337,6 +441,7 @@ export default function ReportsPage() {
       {activeTab === 'bs' && <BalanceSheetPanel />}
       {activeTab === 'tb' && <TrialBalancePanel />}
       {activeTab === 'ar' && <ArAgingPanel />}
+      {activeTab === 'cc' && <CostCenterPanel />}
     </div>
   );
 }

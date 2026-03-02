@@ -211,3 +211,97 @@ export function useAuditLog(filters: AuditFilters) {
     },
   });
 }
+
+/* ───────── Global search ───────── */
+
+export interface SearchResult {
+  module: string;
+  entity: string;
+  id: string;
+  title: string;
+  subtitle?: string;
+  url: string;
+  score: number;
+}
+
+export interface SearchResponse {
+  results: SearchResult[];
+  totalHits: number;
+  processingTimeMs: number;
+}
+
+export function useGlobalSearch(
+  query: string,
+  modules?: string[],
+  limit?: number,
+) {
+  return useQuery({
+    queryKey: ['platform', 'search', query, modules, limit] as const,
+    queryFn: () =>
+      apiClient<SearchResponse>(
+        `/api/v1/platform/search?q=${encodeURIComponent(query)}&modules=${modules?.join(',') ?? ''}&limit=${limit ?? 10}`,
+      ),
+    enabled: query.length >= 2,
+    staleTime: 30_000,
+  });
+}
+
+/* ───────── Notifications ───────── */
+
+export interface Notification {
+  id: string;
+  type: string;
+  title: string;
+  body?: string;
+  read: boolean;
+  createdAt: string;
+  [key: string]: unknown;
+}
+
+export function useNotifications(page?: number, limit?: number) {
+  return useQuery({
+    queryKey: ['platform', 'notifications', page, limit] as const,
+    queryFn: () =>
+      apiClient<{ notifications: Notification[]; total: number; unreadCount: number }>(
+        `/api/v1/platform/notifications?page=${page ?? 1}&limit=${limit ?? 20}`,
+      ),
+  });
+}
+
+export function useUnreadCount() {
+  return useQuery({
+    queryKey: ['platform', 'notifications', 'unread-count'] as const,
+    queryFn: () =>
+      apiClient<{ count: number }>(
+        '/api/v1/platform/notifications/unread-count',
+      ),
+    refetchInterval: 30_000,
+  });
+}
+
+export function useMarkNotificationsRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) =>
+      apiClient<void>('/api/v1/platform/notifications/mark-read', {
+        method: 'POST',
+        body: JSON.stringify({ ids }),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['platform', 'notifications'] });
+    },
+  });
+}
+
+export function useMarkAllRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiClient<void>('/api/v1/platform/notifications/mark-all-read', {
+        method: 'POST',
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['platform', 'notifications'] });
+    },
+  });
+}

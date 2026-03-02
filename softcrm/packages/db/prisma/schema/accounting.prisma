@@ -131,6 +131,7 @@ model FiscalPeriod {
 model JournalEntry {
   id              String    @id @default(uuid()) @db.Uuid
   tenantId        String    @map("tenant_id") @db.Uuid
+  companyId       String?   @map("company_id") @db.Uuid
   date            DateTime  @db.Date
   description     String    @db.VarChar(500)
   reference       Json?
@@ -149,6 +150,7 @@ model JournalEntry {
   creditNotes     CreditNote[]
 
   @@index([tenantId])
+  @@index([tenantId, companyId])
   @@index([tenantId, periodId])
   @@index([tenantId, date])
   @@map("journal_entries")
@@ -161,6 +163,7 @@ model JournalLine {
   id             String  @id @default(uuid()) @db.Uuid
   journalEntryId String  @map("journal_entry_id") @db.Uuid
   accountId      String  @map("account_id") @db.Uuid
+  costCenterId   String? @map("cost_center_id") @db.Uuid
   debit          Decimal @default(0) @db.Decimal(15, 2)
   credit         Decimal @default(0) @db.Decimal(15, 2)
   description    String? @db.VarChar(500)
@@ -170,6 +173,7 @@ model JournalLine {
 
   @@index([journalEntryId])
   @@index([accountId])
+  @@index([costCenterId])
   @@map("journal_lines")
   @@schema("accounting")
 }
@@ -330,5 +334,164 @@ model CreditNote {
   @@index([tenantId])
   @@index([invoiceId])
   @@map("credit_notes")
+  @@schema("accounting")
+}
+
+// ── Budget Period ───────────────────────────────────────────────────────────────
+
+enum BudgetPeriod {
+  MONTHLY
+  QUARTERLY
+  ANNUALLY
+
+  @@schema("accounting")
+}
+
+// ── Bank Transaction Status ─────────────────────────────────────────────────────
+
+enum BankTxnStatus {
+  PENDING
+  MATCHED
+  RECONCILED
+  EXCLUDED
+
+  @@schema("accounting")
+}
+
+// ── Company (Multi-Entity) ─────────────────────────────────────────────────────
+
+model Company {
+  id            String    @id @default(uuid()) @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  name          String    @db.VarChar(255)
+  code          String    @db.VarChar(20)
+  baseCurrency  Currency  @default(USD) @map("base_currency")
+  fiscalYearEnd Int       @default(12) @map("fiscal_year_end")
+  isDefault     Boolean   @default(false) @map("is_default")
+  isActive      Boolean   @default(true) @map("is_active")
+  address       Json?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  budgets       Budget[]
+  costCenters   CostCenter[]
+  exchangeRates ExchangeRate[]
+  bankTransactions BankTransaction[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("companies")
+  @@schema("accounting")
+}
+
+// ── Budget ─────────────────────────────────────────────────────────────────────
+
+model Budget {
+  id          String       @id @default(uuid()) @db.Uuid
+  tenantId    String       @map("tenant_id") @db.Uuid
+  companyId   String       @map("company_id") @db.Uuid
+  name        String       @db.VarChar(255)
+  year        Int
+  period      BudgetPeriod @default(MONTHLY)
+  isActive    Boolean      @default(true) @map("is_active")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  createdBy   String?      @map("created_by") @db.Uuid
+
+  company     Company      @relation(fields: [companyId], references: [id])
+  lines       BudgetLine[]
+
+  @@unique([tenantId, companyId, name, year])
+  @@index([tenantId])
+  @@map("budgets")
+  @@schema("accounting")
+}
+
+// ── Budget Line ────────────────────────────────────────────────────────────────
+
+model BudgetLine {
+  id          String  @id @default(uuid()) @db.Uuid
+  budgetId    String  @map("budget_id") @db.Uuid
+  accountId   String  @map("account_id") @db.Uuid
+  month       Int
+  amount      Decimal @default(0) @db.Decimal(15, 2)
+
+  budget      Budget  @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+
+  @@unique([budgetId, accountId, month])
+  @@index([budgetId])
+  @@map("budget_lines")
+  @@schema("accounting")
+}
+
+// ── Cost Center ────────────────────────────────────────────────────────────────
+
+model CostCenter {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  companyId   String    @map("company_id") @db.Uuid
+  code        String    @db.VarChar(20)
+  name        String    @db.VarChar(255)
+  parentId    String?   @map("parent_id") @db.Uuid
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  company     Company      @relation(fields: [companyId], references: [id])
+  parent      CostCenter?  @relation("CostCenterHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children    CostCenter[] @relation("CostCenterHierarchy")
+
+  @@unique([tenantId, companyId, code])
+  @@index([tenantId])
+  @@map("cost_centers")
+  @@schema("accounting")
+}
+
+// ── Exchange Rate ──────────────────────────────────────────────────────────────
+
+model ExchangeRate {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  companyId     String   @map("company_id") @db.Uuid
+  fromCurrency  Currency @map("from_currency")
+  toCurrency    Currency @map("to_currency")
+  rate          Decimal  @db.Decimal(18, 8)
+  effectiveDate DateTime @map("effective_date") @db.Date
+  source        String   @default("manual") @db.VarChar(50)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  company       Company  @relation(fields: [companyId], references: [id])
+
+  @@index([tenantId, companyId, fromCurrency, toCurrency, effectiveDate])
+  @@map("exchange_rates")
+  @@schema("accounting")
+}
+
+// ── Bank Transaction (Bank Feeds) ──────────────────────────────────────────────
+
+model BankTransaction {
+  id                String        @id @default(uuid()) @db.Uuid
+  tenantId          String        @map("tenant_id") @db.Uuid
+  companyId         String        @map("company_id") @db.Uuid
+  bankAccountId     String        @map("bank_account_id") @db.Uuid
+  externalId        String?       @map("external_id") @db.VarChar(255)
+  date              DateTime      @db.Date
+  description       String        @db.VarChar(500)
+  amount            Decimal       @db.Decimal(15, 2)
+  currency          Currency      @default(USD)
+  category          String?       @db.VarChar(100)
+  status            BankTxnStatus @default(PENDING)
+  matchedAccountId  String?       @map("matched_account_id") @db.Uuid
+  journalEntryId    String?       @map("journal_entry_id") @db.Uuid
+  plaidTxnId        String?       @map("plaid_txn_id") @db.VarChar(255)
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  company           Company       @relation(fields: [companyId], references: [id])
+
+  @@unique([tenantId, externalId])
+  @@index([tenantId, companyId, status])
+  @@index([tenantId, bankAccountId, date])
+  @@map("bank_transactions")
   @@schema("accounting")
 }

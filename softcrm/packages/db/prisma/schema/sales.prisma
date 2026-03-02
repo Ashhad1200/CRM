@@ -96,6 +96,8 @@ model Lead {
   jobTitle           String?    @map("job_title") @db.VarChar(200)
   source             LeadSource
   score              Int        @default(0)
+  scoreBreakdown     Json?      @map("score_breakdown")
+  lastScoredAt       DateTime?  @map("last_scored_at")
   status             LeadStatus @default(NEW)
   assignedOwnerId    String?    @map("assigned_owner_id") @db.Uuid
   convertedContactId String?    @map("converted_contact_id") @db.Uuid
@@ -300,5 +302,135 @@ model QuoteLine {
   quote       Quote   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
 
   @@map("quote_lines")
+  @@schema("sales")
+}
+
+// ── Gamification ──────────────────────────────────────────────────────────────
+
+model SalesTarget {
+  id          String         @id @default(uuid()) @db.Uuid
+  tenantId    String         @map("tenant_id") @db.Uuid
+  userId      String         @map("user_id") @db.Uuid
+  period      TargetPeriod
+  startDate   DateTime       @map("start_date") @db.Date
+  endDate     DateTime       @map("end_date") @db.Date
+  metric      TargetMetric
+  targetValue Decimal        @map("target_value") @db.Decimal(15, 2)
+  actualValue Decimal        @default(0) @map("actual_value") @db.Decimal(15, 2)
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  @@index([tenantId, userId])
+  @@index([tenantId, period, startDate])
+  @@map("sales_targets")
+  @@schema("sales")
+}
+
+enum TargetPeriod {
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+
+  @@schema("sales")
+}
+
+enum TargetMetric {
+  DEALS_WON
+  REVENUE
+  ACTIVITIES
+  LEADS_CONVERTED
+  MEETINGS_BOOKED
+
+  @@schema("sales")
+}
+
+model Badge {
+  id          String       @id @default(uuid()) @db.Uuid
+  tenantId    String       @map("tenant_id") @db.Uuid
+  name        String       @db.VarChar(100)
+  description String?      @db.VarChar(500)
+  icon        String       @db.VarChar(50)
+  criteria    Json
+  createdAt   DateTime     @default(now()) @map("created_at")
+
+  userBadges  UserBadge[]
+
+  @@unique([tenantId, name])
+  @@map("badges")
+  @@schema("sales")
+}
+
+model UserBadge {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  badgeId   String   @map("badge_id") @db.Uuid
+  earnedAt  DateTime @default(now()) @map("earned_at")
+
+  badge     Badge    @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId])
+  @@index([tenantId, userId])
+  @@map("user_badges")
+  @@schema("sales")
+}
+
+model LeaderboardEntry {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  period        String   @db.VarChar(20)
+  periodStart   DateTime @map("period_start") @db.Date
+  dealsWon      Int      @default(0) @map("deals_won")
+  revenue       Decimal  @default(0) @db.Decimal(15, 2)
+  activities    Int      @default(0)
+  leadsConverted Int     @default(0) @map("leads_converted")
+  score         Int      @default(0)
+  rank          Int      @default(0)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, userId, period, periodStart])
+  @@index([tenantId, period, periodStart, rank])
+  @@map("leaderboard_entries")
+  @@schema("sales")
+}
+
+// ── Social Selling ────────────────────────────────────────────────────────────
+
+model SocialProfile {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  contactId   String   @map("contact_id") @db.Uuid
+  platform    String   @db.VarChar(50)
+  profileUrl  String   @map("profile_url") @db.VarChar(500)
+  profileData Json?    @map("profile_data")
+  enrichedAt  DateTime? @map("enriched_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  activities  SocialActivity[]
+
+  @@unique([tenantId, contactId, platform])
+  @@map("social_profiles")
+  @@schema("sales")
+}
+
+model SocialActivity {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  socialProfileId String   @map("social_profile_id") @db.Uuid
+  type            String   @db.VarChar(50)
+  content         String?  @db.Text
+  engagementScore Int      @default(0) @map("engagement_score")
+  metadata        Json?
+  occurredAt      DateTime @map("occurred_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  socialProfile   SocialProfile @relation(fields: [socialProfileId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, socialProfileId, occurredAt])
+  @@map("social_activities")
   @@schema("sales")
 }

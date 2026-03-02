@@ -361,3 +361,84 @@ supportRouter.get(
     res.json({ data: stats });
   }),
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── Live Chat ────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** GET /chat/sessions — list active chat sessions. */
+supportRouter.get(
+  '/chat/sessions',
+  requirePermission({ module: 'support', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId, sub: actorId } = req.user!;
+    const { getActiveSessions } = await import('./chat.service.js');
+    const sessions = await getActiveSessions(tenantId, actorId);
+    res.json({ data: sessions });
+  }),
+);
+
+/** POST /chat/sessions — create a new chat session (called by widget). */
+supportRouter.post(
+  '/chat/sessions',
+  asyncHandler(async (req: Request, res: Response) => {
+    const tenantId = (req.user?.tid ?? req.body.tenantId) as string;
+    const { createChatSession } = await import('./chat.service.js');
+    const session = await createChatSession(tenantId, req.body);
+    res.status(201).json({ data: session });
+  }),
+);
+
+/** GET /chat/sessions/:id/messages — get session messages. */
+supportRouter.get(
+  '/chat/sessions/:id/messages',
+  requirePermission({ module: 'support', action: 'read' }),
+  validate({ params: uuidParamSchema }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const id = param(req, 'id');
+    const { getSessionMessages } = await import('./chat.service.js');
+    const messages = await getSessionMessages(tenantId, id);
+    res.json({ data: messages });
+  }),
+);
+
+/** POST /chat/sessions/:id/messages — send a message. */
+supportRouter.post(
+  '/chat/sessions/:id/messages',
+  requirePermission({ module: 'support', action: 'update' }),
+  validate({ params: uuidParamSchema }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const id = param(req, 'id');
+    const { sendMessage } = await import('./chat.service.js');
+    const message = await sendMessage(tenantId, id, req.body);
+    res.status(201).json({ data: message });
+  }),
+);
+
+/** POST /chat/sessions/:id/close — close a chat session. */
+supportRouter.post(
+  '/chat/sessions/:id/close',
+  requirePermission({ module: 'support', action: 'update' }),
+  validate({ params: uuidParamSchema }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const id = param(req, 'id');
+    const { closeSession } = await import('./chat.service.js');
+    const session = await closeSession(tenantId, id, req.body.rating);
+    res.json({ data: session });
+  }),
+);
+
+/** GET /chat/metrics — get chat metrics. */
+supportRouter.get(
+  '/chat/metrics',
+  requirePermission({ module: 'support', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const { getChatMetrics } = await import('./chat.service.js');
+    const metrics = await getChatMetrics(tenantId);
+    res.json({ data: metrics });
+  }),
+);

@@ -1,0 +1,222 @@
+// ── Manufacturing Module Schema ─────────────────────────────────────────────────
+// BillOfMaterial, BOMLine, WorkCenter, WorkOrder, WorkOrderOperation,
+// MaterialConsumption, ProductionOutput, MRPRun
+
+// ── BillOfMaterial ─────────────────────────────────────────────────────────────
+
+model BillOfMaterial {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  productId   String    @map("product_id") @db.Uuid
+  name        String    @db.VarChar(255)
+  bomVersion  String    @default("1.0") @map("bom_version") @db.VarChar(50)
+  isActive    Boolean   @default(true) @map("is_active")
+  totalCost   Decimal   @default(0) @map("total_cost") @db.Decimal(15, 4)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  createdBy   String?   @map("created_by") @db.Uuid
+  version     Int       @default(1)
+
+  lines       BOMLine[]
+  workOrders  WorkOrder[]
+
+  @@index([tenantId])
+  @@index([tenantId, productId])
+  @@index([tenantId, isActive])
+  @@map("bills_of_material")
+  @@schema("manufacturing")
+}
+
+// ── BOMLine ────────────────────────────────────────────────────────────────────
+
+model BOMLine {
+  id                 String         @id @default(uuid()) @db.Uuid
+  bomId              String         @map("bom_id") @db.Uuid
+  componentProductId String         @map("component_product_id") @db.Uuid
+  description        String?        @db.VarChar(500)
+  quantity           Decimal        @db.Decimal(15, 4)
+  unit               String         @db.VarChar(50)
+  unitCost           Decimal        @default(0) @map("unit_cost") @db.Decimal(15, 4)
+  lineTotal          Decimal        @default(0) @map("line_total") @db.Decimal(15, 4)
+
+  bom                BillOfMaterial @relation(fields: [bomId], references: [id], onDelete: Cascade)
+
+  @@index([bomId])
+  @@index([componentProductId])
+  @@map("bom_lines")
+  @@schema("manufacturing")
+}
+
+// ── WorkCenter ─────────────────────────────────────────────────────────────────
+
+model WorkCenter {
+  id             String             @id @default(uuid()) @db.Uuid
+  tenantId       String             @map("tenant_id") @db.Uuid
+  name           String             @db.VarChar(255)
+  description    String?            @db.Text
+  capacity       Decimal            @default(0) @db.Decimal(15, 2)
+  capacityUnit   String             @default("hours") @map("capacity_unit") @db.VarChar(50)
+  costPerHour    Decimal            @default(0) @map("cost_per_hour") @db.Decimal(15, 4)
+  status         WorkCenterStatus   @default(ACTIVE)
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+
+  operations     WorkOrderOperation[]
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("work_centers")
+  @@schema("manufacturing")
+}
+
+enum WorkCenterStatus {
+  ACTIVE
+  INACTIVE
+
+  @@schema("manufacturing")
+}
+
+// ── WorkOrder ──────────────────────────────────────────────────────────────────
+
+model WorkOrder {
+  id                String          @id @default(uuid()) @db.Uuid
+  tenantId          String          @map("tenant_id") @db.Uuid
+  workOrderNumber   String          @map("work_order_number") @db.VarChar(50)
+  bomId             String          @map("bom_id") @db.Uuid
+  productId         String          @map("product_id") @db.Uuid
+  plannedQuantity   Decimal         @map("planned_quantity") @db.Decimal(15, 4)
+  producedQuantity  Decimal         @default(0) @map("produced_quantity") @db.Decimal(15, 4)
+  status            WorkOrderStatus @default(DRAFT)
+  plannedStartDate  DateTime?       @map("planned_start_date") @db.Date
+  plannedEndDate    DateTime?       @map("planned_end_date") @db.Date
+  actualStartDate   DateTime?       @map("actual_start_date")
+  actualEndDate     DateTime?       @map("actual_end_date")
+  notes             String?         @db.Text
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+  createdBy         String?         @map("created_by") @db.Uuid
+  updatedBy         String?         @map("updated_by") @db.Uuid
+  version           Int             @default(1)
+
+  bom               BillOfMaterial  @relation(fields: [bomId], references: [id])
+  operations        WorkOrderOperation[]
+  materialConsumptions MaterialConsumption[]
+  productionOutputs ProductionOutput[]
+
+  @@unique([tenantId, workOrderNumber])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, productId])
+  @@index([tenantId, bomId])
+  @@map("work_orders")
+  @@schema("manufacturing")
+}
+
+enum WorkOrderStatus {
+  DRAFT
+  RELEASED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+
+  @@schema("manufacturing")
+}
+
+// ── WorkOrderOperation ─────────────────────────────────────────────────────────
+
+model WorkOrderOperation {
+  id            String              @id @default(uuid()) @db.Uuid
+  workOrderId   String              @map("work_order_id") @db.Uuid
+  workCenterId  String              @map("work_center_id") @db.Uuid
+  name          String              @db.VarChar(255)
+  sequence      Int
+  plannedHours  Decimal             @default(0) @map("planned_hours") @db.Decimal(10, 2)
+  actualHours   Decimal             @default(0) @map("actual_hours") @db.Decimal(10, 2)
+  status        OperationStatus     @default(PENDING)
+  startedAt     DateTime?           @map("started_at")
+  completedAt   DateTime?           @map("completed_at")
+
+  workOrder     WorkOrder           @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  workCenter    WorkCenter          @relation(fields: [workCenterId], references: [id])
+
+  @@index([workOrderId])
+  @@index([workCenterId])
+  @@map("work_order_operations")
+  @@schema("manufacturing")
+}
+
+enum OperationStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+
+  @@schema("manufacturing")
+}
+
+// ── MaterialConsumption ────────────────────────────────────────────────────────
+
+model MaterialConsumption {
+  id                 String    @id @default(uuid()) @db.Uuid
+  workOrderId        String    @map("work_order_id") @db.Uuid
+  componentProductId String    @map("component_product_id") @db.Uuid
+  plannedQty         Decimal   @map("planned_qty") @db.Decimal(15, 4)
+  consumedQty        Decimal   @default(0) @map("consumed_qty") @db.Decimal(15, 4)
+  unit               String    @db.VarChar(50)
+  consumedAt         DateTime? @map("consumed_at")
+  consumedBy         String?   @map("consumed_by") @db.Uuid
+
+  workOrder          WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@index([workOrderId])
+  @@index([componentProductId])
+  @@map("material_consumptions")
+  @@schema("manufacturing")
+}
+
+// ── ProductionOutput ───────────────────────────────────────────────────────────
+
+model ProductionOutput {
+  id                  String    @id @default(uuid()) @db.Uuid
+  workOrderId         String    @map("work_order_id") @db.Uuid
+  productId           String    @map("product_id") @db.Uuid
+  quantity            Decimal   @db.Decimal(15, 4)
+  unit                String    @db.VarChar(50)
+  lotNumber           String?   @map("lot_number") @db.VarChar(100)
+  receivedAt          DateTime  @default(now()) @map("received_at")
+  receivedBy          String?   @map("received_by") @db.Uuid
+  warehouseLocationId String?   @map("warehouse_location_id") @db.Uuid
+
+  workOrder           WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@index([workOrderId])
+  @@index([productId])
+  @@map("production_outputs")
+  @@schema("manufacturing")
+}
+
+// ── MRPRun ─────────────────────────────────────────────────────────────────────
+
+model MRPRun {
+  id              String    @id @default(uuid()) @db.Uuid
+  tenantId        String    @map("tenant_id") @db.Uuid
+  runDate         DateTime  @default(now()) @map("run_date")
+  horizon         Int       @default(30)
+  status          MRPStatus @default(RUNNING)
+  recommendations Json      @default("[]")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  createdBy       String?   @map("created_by") @db.Uuid
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, runDate])
+  @@map("mrp_runs")
+  @@schema("manufacturing")
+}
+
+enum MRPStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+
+  @@schema("manufacturing")
+}

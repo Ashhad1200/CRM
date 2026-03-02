@@ -165,4 +165,28 @@ export const zIndex = {
   popover: 1500,
   toast: 1600,
   tooltip: 1700,
+  commandPalette: 1800,
+} as const;
+
+// ── Semantic Surface Colors (light / dark aware) ──────────────────────────────
+
+export const surfaces = {
+  light: {
+    page: '#f8fafc',
+    card: 'rgba(255, 255, 255, 0.7)',
+    cardHover: 'rgba(255, 255, 255, 0.85)',
+    sidebar: 'rgba(255, 255, 255, 0.55)',
+    overlay: 'rgba(0, 0, 0, 0.4)',
+    input: 'rgba(255, 255, 255, 0.6)',
+    inputFocus: 'rgba(255, 255, 255, 0.9)',
+  },
+  dark: {
+    page: '#0f172a',
+    card: 'rgba(30, 41, 59, 0.7)',
+    cardHover: 'rgba(30, 41, 59, 0.85)',
+    sidebar: 'rgba(15, 23, 42, 0.8)',
+    overlay: 'rgba(0, 0, 0, 0.6)',
+    input: 'rgba(30, 41, 59, 0.6)',
+    inputFocus: 'rgba(30, 41, 59, 0.9)',
+  },
 } as const;

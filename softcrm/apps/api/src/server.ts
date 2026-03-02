@@ -26,6 +26,25 @@ import { projectsRouter } from './modules/projects/routes.js';
 import { workflowRouter } from './modules/platform/workflows/workflow.routes.js';
 import { gdprRouter } from './modules/platform/gdpr/gdpr.routes.js';
 import { syncRouter } from './modules/sync/routes.js';
+import { searchRouter } from './modules/platform/search/search.routes.js';
+import { notificationRouter } from './modules/platform/notifications/notification.routes.js';
+import { notificationPreferenceRouter } from './modules/platform/notifications/notification-preference.routes.js';
+import { registerNotificationListeners } from './modules/platform/notifications/notification.listeners.js';
+import { hrRouter } from './modules/hr/routes.js';
+import { registerHrListeners } from './modules/hr/listeners.js';
+import { manufacturingRouter } from './modules/manufacturing/routes.js';
+import { registerManufacturingListeners } from './modules/manufacturing/listeners.js';
+import { warehouseRouter } from './modules/warehouse/routes.js';
+import { registerWarehouseListeners } from './modules/warehouse/listeners.js';
+import { procurementRouter } from './modules/procurement/routes.js';
+import { registerProcurementListeners } from './modules/procurement/listeners.js';
+import { posRouter } from './modules/pos/routes.js';
+import { registerListeners as registerPosListeners } from './modules/pos/listeners.js';
+import { assetsRouter } from './modules/assets/routes.js';
+import { registerListeners as registerAssetsListeners } from './modules/assets/listeners.js';
+import { qualityRouter } from './modules/quality/routes.js';
+import { registerQualityListeners } from './modules/quality/listeners.js';
+import { eventBus } from './infra/event-bus.js';
 import { auditMiddleware } from './middleware/audit.js';
 import { logger } from './logger.js';
 
@@ -79,7 +98,27 @@ export function createApp(): Express {
   app.use('/api/v1/projects', projectsRouter);
   app.use('/api/v1/platform/workflows', workflowRouter);
   app.use('/api/v1/platform', gdprRouter);
+  app.use('/api/v1/platform/search', searchRouter);
+  app.use('/api/v1/platform/notifications', notificationRouter);
+  app.use('/api/v1/platform/notification-preferences', notificationPreferenceRouter);
   app.use('/api/v1/sync', syncRouter);
+  app.use('/api/v1/hr', hrRouter);
+  app.use('/api/v1/manufacturing', manufacturingRouter);
+  app.use('/api/v1/warehouse', warehouseRouter);
+  app.use('/api/v1/procurement', procurementRouter);
+  app.use('/api/v1/pos', posRouter);
+  app.use('/api/v1/assets', assetsRouter);
+  app.use('/api/v1/quality', qualityRouter);
+
+  // ── Register event-driven notification listeners ─────────────────────────────
+  registerNotificationListeners();
+  registerHrListeners();
+  registerManufacturingListeners();
+  registerWarehouseListeners(eventBus);
+  registerProcurementListeners();
+  registerPosListeners();
+  registerAssetsListeners(eventBus);
+  registerQualityListeners();
 
   // ── Audit (captures mutations after routes respond) ─────────────────────────
   app.use(auditMiddleware);

@@ -473,3 +473,409 @@ accountingRouter.post(
     res.json({ data: period });
   }),
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── Companies (Multi-Entity) ────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+accountingRouter.get(
+  '/companies',
+  requirePermission({ module: 'accounting', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const { getCompanies } = await import('./multi-company/company.service.js');
+    const data = await getCompanies(tenantId);
+    res.json({ data });
+  }),
+);
+
+accountingRouter.post(
+  '/companies',
+  requirePermission({ module: 'accounting', action: 'create' }),
+  validate({
+    body: z.object({
+      name: z.string().min(1),
+      code: z.string().min(1),
+      baseCurrency: z.string().min(1),
+      fiscalYearEnd: z.string().optional(),
+      address: z.string().optional(),
+    }),
+  }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId, sub: actorId } = req.user!;
+    const { createCompany } = await import('./multi-company/company.service.js');
+    const data = await createCompany(tenantId, req.body, actorId);
+    res.status(201).json({ data });
+  }),
+);
+
+accountingRouter.patch(
+  '/companies/:id',
+  requirePermission({ module: 'accounting', action: 'update' }),
+  validate({ params: uuidParamSchema }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const id = param(req, 'id');
+    const { updateCompany } = await import('./multi-company/company.service.js');
+    const data = await updateCompany(tenantId, id, req.body);
+    res.json({ data });
+  }),
+);
+
+accountingRouter.post(
+  '/companies/:id/set-default',
+  requirePermission({ module: 'accounting', action: 'update' }),
+  validate({ params: uuidParamSchema }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const id = param(req, 'id');
+    const { setDefaultCompany } = await import('./multi-company/company.service.js');
+    const data = await setDefaultCompany(tenantId, id);
+    res.json({ data });
+  }),
+);
+
+accountingRouter.get(
+  '/companies/:id',
+  requirePermission({ module: 'accounting', action: 'read' }),
+  validate({ params: uuidParamSchema }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const id = param(req, 'id');
+    const { getCompany } = await import('./multi-company/company.service.js');
+    const data = await getCompany(tenantId, id);
+    res.json({ data });
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── Budgets ─────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+accountingRouter.get(
+  '/budgets',
+  requirePermission({ module: 'accounting', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const companyId = req.query['companyId'] as string | undefined;
+    const { getBudgets } = await import('./budgets/budget.service.js');
+    const data = await getBudgets(tenantId, companyId);
+    res.json({ data });
+  }),
+);
+
+accountingRouter.post(
+  '/budgets',
+  requirePermission({ module: 'accounting', action: 'create' }),
+  validate({
+    body: z.object({
+      name: z.string().min(1),
+      year: z.number().int(),
+      period: z.string().min(1),
+      companyId: z.string().uuid(),
+    }),
+  }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId, sub: actorId } = req.user!;
+    const { createBudget } = await import('./budgets/budget.service.js');
+    const data = await createBudget(tenantId, req.body, actorId);
+    res.status(201).json({ data });
+  }),
+);
+
+accountingRouter.get(
+  '/budgets/:id',
+  requirePermission({ module: 'accounting', action: 'read' }),
+  validate({ params: uuidParamSchema }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const id = param(req, 'id');
+    const { getBudget } = await import('./budgets/budget.service.js');
+    const data = await getBudget(tenantId, id);
+    res.json({ data });
+  }),
+);
+
+accountingRouter.put(
+  '/budgets/:id/lines',
+  requirePermission({ module: 'accounting', action: 'update' }),
+  validate({
+    params: uuidParamSchema,
+    body: z.object({
+      lines: z.array(
+        z.object({
+          accountId: z.string().uuid(),
+          month: z.number().int().min(1).max(12),
+          amount: z.number(),
+        }),
+      ),
+    }),
+  }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const id = param(req, 'id');
+    const { updateBudgetLines } = await import('./budgets/budget.service.js');
+    const data = await updateBudgetLines(tenantId, id, req.body.lines);
+    res.json({ data });
+  }),
+);
+
+accountingRouter.get(
+  '/budgets/:id/variance',
+  requirePermission({ module: 'accounting', action: 'read' }),
+  validate({ params: uuidParamSchema }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const id = param(req, 'id');
+    const month = req.query['month'] ? Number(req.query['month']) : undefined;
+    const { getBudgetVariance } = await import('./budgets/budget.service.js');
+    const data = await getBudgetVariance(tenantId, id, month);
+    res.json({ data });
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── Cost Centers ────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+accountingRouter.get(
+  '/cost-centers',
+  requirePermission({ module: 'accounting', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const companyId = req.query['companyId'] as string | undefined;
+    const { getCostCenters } = await import('./cost-centers/cost-center.service.js');
+    const data = await getCostCenters(tenantId, companyId);
+    res.json({ data });
+  }),
+);
+
+accountingRouter.post(
+  '/cost-centers',
+  requirePermission({ module: 'accounting', action: 'create' }),
+  validate({
+    body: z.object({
+      code: z.string().min(1),
+      name: z.string().min(1),
+      companyId: z.string().uuid(),
+      parentId: z.string().uuid().optional(),
+    }),
+  }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const { createCostCenter } = await import('./cost-centers/cost-center.service.js');
+    const data = await createCostCenter(tenantId, req.body);
+    res.status(201).json({ data });
+  }),
+);
+
+accountingRouter.patch(
+  '/cost-centers/:id',
+  requirePermission({ module: 'accounting', action: 'update' }),
+  validate({
+    params: uuidParamSchema,
+    body: z.object({
+      name: z.string().min(1).optional(),
+      isActive: z.boolean().optional(),
+    }),
+  }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const id = param(req, 'id');
+    const { updateCostCenter } = await import('./cost-centers/cost-center.service.js');
+    const data = await updateCostCenter(tenantId, id, req.body);
+    res.json({ data });
+  }),
+);
+
+accountingRouter.get(
+  '/cost-centers/report',
+  requirePermission({ module: 'accounting', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const companyId = req.query['companyId'] as string;
+    const startDate = req.query['startDate'] as string;
+    const endDate = req.query['endDate'] as string;
+    const { getCostCenterReport } = await import('./cost-centers/cost-center.service.js');
+    const data = await getCostCenterReport(tenantId, companyId, startDate, endDate);
+    res.json({ data });
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── Bank Feeds ──────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+accountingRouter.post(
+  '/bank-feeds/import',
+  requirePermission({ module: 'accounting', action: 'create' }),
+  validate({
+    body: z.object({
+      companyId: z.string().uuid(),
+      bankAccountId: z.string().uuid(),
+      transactions: z.array(z.object({}).passthrough()),
+    }),
+  }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const { companyId, bankAccountId, transactions } = req.body;
+    const { importTransactions } = await import('./bank-feeds/bank-feeds.service.js');
+    const data = await importTransactions(tenantId, companyId, bankAccountId, transactions);
+    res.status(201).json({ data });
+  }),
+);
+
+accountingRouter.get(
+  '/bank-feeds',
+  requirePermission({ module: 'accounting', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const companyId = req.query['companyId'] as string;
+    const status = req.query['status'] as string | undefined;
+    const startDate = req.query['startDate'] as string | undefined;
+    const endDate = req.query['endDate'] as string | undefined;
+    const { getTransactions } = await import('./bank-feeds/bank-feeds.service.js');
+    const data = await getTransactions(tenantId, companyId, { status, startDate, endDate });
+    res.json({ data });
+  }),
+);
+
+accountingRouter.post(
+  '/bank-feeds/:id/match',
+  requirePermission({ module: 'accounting', action: 'update' }),
+  validate({
+    params: uuidParamSchema,
+    body: z.object({
+      accountId: z.string().uuid(),
+    }),
+  }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const id = param(req, 'id');
+    const { matchTransaction } = await import('./bank-feeds/bank-feeds.service.js');
+    const data = await matchTransaction(tenantId, id, req.body.accountId);
+    res.json({ data });
+  }),
+);
+
+accountingRouter.post(
+  '/bank-feeds/:id/reconcile',
+  requirePermission({ module: 'accounting', action: 'update' }),
+  validate({ params: uuidParamSchema }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId, sub: actorId } = req.user!;
+    const id = param(req, 'id');
+    const { reconcileTransaction } = await import('./bank-feeds/bank-feeds.service.js');
+    const data = await reconcileTransaction(tenantId, id, actorId);
+    res.json({ data });
+  }),
+);
+
+accountingRouter.post(
+  '/bank-feeds/:id/exclude',
+  requirePermission({ module: 'accounting', action: 'update' }),
+  validate({ params: uuidParamSchema }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const id = param(req, 'id');
+    const { excludeTransaction } = await import('./bank-feeds/bank-feeds.service.js');
+    const data = await excludeTransaction(tenantId, id);
+    res.json({ data });
+  }),
+);
+
+accountingRouter.get(
+  '/bank-feeds/summary',
+  requirePermission({ module: 'accounting', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const companyId = req.query['companyId'] as string;
+    const { getReconciliationSummary } = await import('./bank-feeds/bank-feeds.service.js');
+    const data = await getReconciliationSummary(tenantId, companyId);
+    res.json({ data });
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── Exchange Rates ──────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+accountingRouter.get(
+  '/fx-rates',
+  requirePermission({ module: 'accounting', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const companyId = req.query['companyId'] as string;
+    const fromCurrency = req.query['fromCurrency'] as string | undefined;
+    const toCurrency = req.query['toCurrency'] as string | undefined;
+    const { getExchangeRates } = await import('./fx/fx.service.js');
+    const data = await getExchangeRates(tenantId, companyId, fromCurrency, toCurrency);
+    res.json({ data });
+  }),
+);
+
+accountingRouter.post(
+  '/fx-rates',
+  requirePermission({ module: 'accounting', action: 'create' }),
+  validate({
+    body: z.object({
+      companyId: z.string().uuid(),
+      fromCurrency: z.string().min(1),
+      toCurrency: z.string().min(1),
+      rate: z.number().positive(),
+      effectiveDate: z.string().min(1),
+    }),
+  }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId, sub: actorId } = req.user!;
+    const { companyId, ...rateData } = req.body;
+    const { setExchangeRate } = await import('./fx/fx.service.js');
+    const data = await setExchangeRate(tenantId, companyId, rateData, actorId);
+    res.status(201).json({ data });
+  }),
+);
+
+accountingRouter.get(
+  '/fx-rates/latest',
+  requirePermission({ module: 'accounting', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const companyId = req.query['companyId'] as string;
+    const fromCurrency = req.query['fromCurrency'] as string;
+    const toCurrency = req.query['toCurrency'] as string;
+    const { getLatestRate } = await import('./fx/fx.service.js');
+    const data = await getLatestRate(tenantId, companyId, fromCurrency, toCurrency);
+    res.json({ data });
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── Consolidation ───────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+accountingRouter.get(
+  '/consolidation/profit-loss',
+  requirePermission({ module: 'accounting', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const companyIds = (req.query['companyIds'] as string)?.split(',') || [];
+    const startDate = req.query['startDate'] as string;
+    const endDate = req.query['endDate'] as string;
+    const { consolidateProfitAndLoss } = await import('./multi-company/consolidation.service.js');
+    const data = await consolidateProfitAndLoss(tenantId, companyIds, startDate, endDate);
+    res.json({ data });
+  }),
+);
+
+accountingRouter.get(
+  '/consolidation/balance-sheet',
+  requirePermission({ module: 'accounting', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const companyIds = (req.query['companyIds'] as string)?.split(',') || [];
+    const asOfDate = req.query['asOfDate'] as string;
+    const { consolidateBalanceSheet } = await import('./multi-company/consolidation.service.js');
+    const data = await consolidateBalanceSheet(tenantId, companyIds, asOfDate);
+    res.json({ data });
+  }),
+);

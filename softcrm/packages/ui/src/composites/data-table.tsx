@@ -5,14 +5,67 @@ import {
   type ColumnFiltersState,
   type VisibilityState,
   type RowSelectionState,
+  type ExpandedState,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
+  getExpandedRowModel,
   useReactTable,
 } from '@tanstack/react-table';
 import { cn } from '../utils/cn.js';
+
+// ── Inline Edit Cell ────────────────────────────────────────────────────────────
+
+function InlineEditCell({
+  value,
+  onSave,
+}: {
+  value: unknown;
+  onSave: (value: unknown) => void;
+}): React.ReactElement {
+  const [editing, setEditing] = React.useState(false);
+  const [draft, setDraft] = React.useState(String(value ?? ''));
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
+
+  if (!editing) {
+    return (
+      <span
+        onDoubleClick={() => {
+          setDraft(String(value ?? ''));
+          setEditing(true);
+        }}
+        className="cursor-text"
+      >
+        {String(value ?? '')}
+      </span>
+    );
+  }
+
+  const commit = () => {
+    setEditing(false);
+    if (draft !== String(value ?? '')) onSave(draft);
+  };
+
+  return (
+    <input
+      ref={inputRef}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') commit();
+        if (e.key === 'Escape') setEditing(false);
+      }}
+      className="h-7 w-full rounded border border-brand-300 bg-white/80 px-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500"
+    />
+  );
+}
 
 // ── Types ───────────────────────────────────────────────────────────────────────
 
@@ -23,6 +76,9 @@ export interface DataTableProps<TData> {
   searchPlaceholder?: string;
   enableRowSelection?: boolean;
   onRowSelectionChange?: (rows: TData[]) => void;
+  onCellEdit?: (rowIndex: number, columnId: string, value: unknown) => void;
+  renderExpandedRow?: (row: TData) => React.ReactNode;
+  onExport?: (data: TData[]) => void;
   pageSize?: number;
   className?: string;
 }
@@ -36,6 +92,9 @@ export function DataTable<TData>({
   searchPlaceholder = 'Search...',
   enableRowSelection = false,
   onRowSelectionChange,
+  onCellEdit,
+  renderExpandedRow,
+  onExport,
   pageSize = 10,
   className,
 }: DataTableProps<TData>): React.ReactElement {
@@ -43,6 +102,10 @@ export function DataTable<TData>({
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
+  const [expanded, setExpanded] = React.useState<ExpandedState>({});
+  const [colVisOpen, setColVisOpen] = React.useState(false);
+
+  const totalColumns = (renderExpandedRow ? 1 : 0) + columns.length;
 
   const table = useReactTable({
     data,
@@ -51,16 +114,19 @@ export function DataTable<TData>({
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    getExpandedRowModel: getExpandedRowModel(),
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
+    onExpandedChange: setExpanded,
     enableRowSelection,
     state: {
       sorting,
       columnFilters,
       columnVisibility,
       rowSelection,
+      expanded,
     },
     initialState: {
       pagination: { pageSize },
@@ -76,26 +142,67 @@ export function DataTable<TData>({
   }, [rowSelection, onRowSelectionChange, table]);
 
   return (
-    <div className={cn('space-y-4', className)}>
-      {/* Search / Filter Bar */}
-      {searchKey && (
+    <div className={cn('glass-2 rounded-xl space-y-4 p-4', className)}>
+      {/* Toolbar */}
+      {(searchKey || onExport || true) && (
         <div className="flex items-center gap-2">
-          <input
-            type="text"
-            placeholder={searchPlaceholder}
-            value={(table.getColumn(searchKey)?.getFilterValue() as string) ?? ''}
-            onChange={(e) => table.getColumn(searchKey)?.setFilterValue(e.target.value)}
-            className="flex h-9 w-full max-w-sm rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm shadow-sm placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
-          />
+          {searchKey && (
+            <input
+              type="text"
+              placeholder={searchPlaceholder}
+              value={(table.getColumn(searchKey)?.getFilterValue() as string) ?? ''}
+              onChange={(e) => table.getColumn(searchKey)?.setFilterValue(e.target.value)}
+              className="flex h-9 w-full max-w-sm rounded-md glass-1 border border-white/20 px-3 py-1.5 text-sm shadow-sm placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+          )}
+          <div className="ml-auto flex items-center gap-2">
+            {/* Column visibility toggle */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setColVisOpen((v) => !v)}
+                className="inline-flex h-9 items-center gap-1.5 rounded-md glass-1 border border-white/20 px-3 text-sm font-medium hover:bg-white/20 transition-colors"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                Columns
+              </button>
+              {colVisOpen && (
+                <div className="absolute right-0 top-full z-20 mt-1 min-w-[10rem] rounded-lg glass-2 border border-white/20 p-2 shadow-lg">
+                  {table.getAllLeafColumns().map((col) => (
+                    <label key={col.id} className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-white/10 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={col.getIsVisible()}
+                        onChange={col.getToggleVisibilityHandler()}
+                        className="accent-brand-500"
+                      />
+                      {typeof col.columnDef.header === 'string' ? col.columnDef.header : col.id}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+            {onExport && (
+              <button
+                type="button"
+                onClick={() => onExport(data)}
+                className="inline-flex h-9 items-center gap-1.5 rounded-md glass-1 border border-white/20 px-3 text-sm font-medium hover:bg-white/20 transition-colors"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export
+              </button>
+            )}
+          </div>
         </div>
       )}
 
       {/* Table */}
-      <div className="rounded-md border border-neutral-200">
+      <div className="rounded-lg border border-white/15 overflow-hidden">
         <table className="w-full caption-bottom text-sm">
-          <thead className="[&_tr]:border-b">
+          <thead>
             {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id} className="border-b border-neutral-200 transition-colors">
+              <tr key={headerGroup.id} className="glass-1 border-b border-white/15 transition-colors">
+                {renderExpandedRow && <th className="w-8" />}
                 {headerGroup.headers.map((header) => (
                   <th
                     key={header.id}
@@ -112,21 +219,52 @@ export function DataTable<TData>({
           <tbody className="[&_tr:last-child]:border-0">
             {table.getRowModel().rows.length ? (
               table.getRowModel().rows.map((row) => (
-                <tr
-                  key={row.id}
-                  data-state={row.getIsSelected() ? 'selected' : undefined}
-                  className="border-b border-neutral-200 transition-colors hover:bg-neutral-50 data-[state=selected]:bg-brand-50"
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-2.5 align-middle [&:has([role=checkbox])]:pr-0">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
-                  ))}
-                </tr>
+                <React.Fragment key={row.id}>
+                  <tr
+                    data-state={row.getIsSelected() ? 'selected' : undefined}
+                    className="border-b border-white/10 transition-colors hover:bg-white/5 data-[state=selected]:bg-brand-50/20"
+                  >
+                    {renderExpandedRow && (
+                      <td className="w-8 px-2 align-middle">
+                        <button
+                          type="button"
+                          onClick={() => row.toggleExpanded()}
+                          className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-white/10 transition-transform"
+                        >
+                          <svg
+                            width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                            className={cn('transition-transform', row.getIsExpanded() && 'rotate-90')}
+                          >
+                            <polyline points="9 18 15 12 9 6" />
+                          </svg>
+                        </button>
+                      </td>
+                    )}
+                    {row.getVisibleCells().map((cell) => (
+                      <td key={cell.id} className="px-4 py-2.5 align-middle [&:has([role=checkbox])]:pr-0">
+                        {onCellEdit ? (
+                          <InlineEditCell
+                            value={cell.getValue()}
+                            onSave={(v) => onCellEdit(row.index, cell.column.id, v)}
+                          />
+                        ) : (
+                          flexRender(cell.column.columnDef.cell, cell.getContext())
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                  {renderExpandedRow && row.getIsExpanded() && (
+                    <tr className="border-b border-white/10 bg-white/[0.02]">
+                      <td colSpan={totalColumns} className="px-4 py-3">
+                        {renderExpandedRow(row.original)}
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
               ))
             ) : (
               <tr>
-                <td colSpan={columns.length} className="h-24 text-center text-neutral-500">
+                <td colSpan={totalColumns} className="h-24 text-center text-neutral-500">
                   No results.
                 </td>
               </tr>
@@ -150,7 +288,7 @@ export function DataTable<TData>({
             type="button"
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
-            className="inline-flex h-8 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium hover:bg-neutral-50 disabled:opacity-50 disabled:pointer-events-none"
+            className="inline-flex h-8 items-center justify-center rounded-md glass-1 border border-white/20 px-3 text-sm font-medium hover:bg-white/20 transition-colors disabled:opacity-50 disabled:pointer-events-none"
           >
             Previous
           </button>
@@ -161,7 +299,7 @@ export function DataTable<TData>({
             type="button"
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
-            className="inline-flex h-8 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium hover:bg-neutral-50 disabled:opacity-50 disabled:pointer-events-none"
+            className="inline-flex h-8 items-center justify-center rounded-md glass-1 border border-white/20 px-3 text-sm font-medium hover:bg-white/20 transition-colors disabled:opacity-50 disabled:pointer-events-none"
           >
             Next
           </button>

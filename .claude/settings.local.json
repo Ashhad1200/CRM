@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh auth status)",
+      "mcp__claude-flow__swarm_status",
+      "Bash(npx @claude-flow/cli@latest agent list)",
+      "Bash(powershell -Command:*)",
+      "Bash(node:*)",
+      "Bash(del \"c:\\\\Dev\\\\soft\\\\soft\\\\CRM\\\\fix-enum.js\")",
+      "Bash(npx prisma validate:*)",
+      "Bash(ls -la \"C:\\\\Dev\\\\soft\\\\soft\\\\CRM\\\\softcrm\\\\apps\\\\web\\\\src\\\\modules\"\" | grep \"^d \")",
+      "Bash(npm run build:*)",
+      "Bash(dir:*)",
+      "Bash(npm run clean:*)",
+      "Bash(npx prisma generate)",
+      "Bash(npx turbo run build:*)",
+      "Bash(pushd \"C:\\\\Dev\\\\soft\\\\soft\\\\CRM\\\\softcrm\")",
+      "Bash(npm run build:api:*)",
+      "Bash(npm run:*)",
+      "Bash(cd:*)",
+      "Bash(cmd /c \"cd /d C:\\\\Dev\\\\soft\\\\soft\\\\CRM\\\\softcrm && npm run build 2>&1\")",
+      "Bash(pushd:*)",
+      "Bash(powershell -c \"Get-Content ''C:\\\\Users\\\\PC\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Dev-soft-soft-CRM\\\\tasks\\\\aadec80.output'' -Tail 100\")",
+      "Bash(powershell -c \"Get-Content ''C:\\\\Users\\\\PC\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Dev-soft-soft-CRM\\\\tasks\\\\ae2178c.output'' -Tail 100\")",
+      "Bash(powershell -c \"Get-Content ''C:\\\\Users\\\\PC\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Dev-soft-soft-CRM\\\\tasks\\\\ab44a16.output'' -Tail 100\")",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill:*)",
+      "Bash(timeout:*)",
+      "Bash(curl:*)",
+      "Bash(pnpm --filter @softcrm/db seed:*)",
+      "Bash(where:*)",
+      "Bash(docker compose:*)",
+      "Bash(pnpm --filter @softcrm/db exec prisma migrate deploy:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "claude-flow"
+  ]
+}
