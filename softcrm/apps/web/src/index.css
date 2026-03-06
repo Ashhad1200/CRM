@@ -155,3 +155,18 @@ body {
 .dark body {
   @apply bg-slate-950 text-slate-100;
 }
+
+/* ── Reduced Transparency (WCAG accessibility) ─────────────────────────────── */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --glass-opacity: 0.92;
+    --glass-blur: 0px;
+    --glass-border-opacity: 1;
+  }
+
+  .glass-1,
+  .glass-2,
+  .glass-3 {
+    backdrop-filter: none;
+  }
+}

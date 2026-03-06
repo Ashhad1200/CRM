@@ -404,3 +404,130 @@ export async function getPaySlips(tenantId: string, payrollRunId: string) {
   await repo.findPayrollRunById(tenantId, payrollRunId);
   return repo.findPaySlips(tenantId, payrollRunId);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── E056 — Employee & Department enhancements ────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export async function terminateEmployee(
+  tenantId: string,
+  employeeId: string,
+  data: { terminationDate: string; reason?: string },
+) {
+  const employee = await repo.findEmployeeById(tenantId, employeeId);
+
+  if (employee.status === 'TERMINATED') {
+    throw new ValidationError('Employee is already terminated');
+  }
+
+  const db = (await import('@softcrm/db')).getPrismaClient();
+  return db.employee.update({
+    where: { id: employeeId },
+    data: {
+      status: 'TERMINATED' as never,
+      terminationDate: new Date(data.terminationDate),
+      version: { increment: 1 },
+    },
+    include: { department: true, position: true },
+  });
+}
+
+export async function getEmployeesByDepartment(tenantId: string, departmentId: string) {
+  // Verify department exists
+  await repo.findDepartmentById(tenantId, departmentId);
+
+  const db = (await import('@softcrm/db')).getPrismaClient();
+  return db.employee.findMany({
+    where: { tenantId, departmentId },
+    include: { department: true, position: true },
+    orderBy: { lastName: 'asc' },
+  });
+}
+
+export async function getDepartment(tenantId: string, id: string) {
+  return repo.findDepartmentById(tenantId, id);
+}
+
+export async function updateDepartment(
+  tenantId: string,
+  id: string,
+  data: { name?: string; parentDepartmentId?: string | null; managerId?: string | null },
+) {
+  await repo.findDepartmentById(tenantId, id);
+
+  const db = (await import('@softcrm/db')).getPrismaClient();
+  return db.department.update({
+    where: { id },
+    data,
+  });
+}
+
+export async function deleteDepartment(tenantId: string, id: string) {
+  await repo.findDepartmentById(tenantId, id);
+
+  const db = (await import('@softcrm/db')).getPrismaClient();
+  const employeeCount = await db.employee.count({ where: { tenantId, departmentId: id } });
+  if (employeeCount > 0) {
+    throw new ValidationError('Cannot delete department that still has employees assigned');
+  }
+
+  return db.department.delete({ where: { id } });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── E057 — Leave Management Enhancement ──────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export async function getLeaveBalance(tenantId: string, employeeId: string) {
+  await repo.findEmployeeById(tenantId, employeeId);
+
+  const db = (await import('@softcrm/db')).getPrismaClient();
+  const leaveTypes = await db.leaveType.findMany({ where: { tenantId } });
+
+  const currentYear = new Date().getFullYear();
+  const yearStart = new Date(currentYear, 0, 1);
+  const yearEnd = new Date(currentYear, 11, 31, 23, 59, 59);
+
+  const approvedRequests = await db.leaveRequest.findMany({
+    where: {
+      tenantId,
+      employeeId,
+      status: 'APPROVED',
+      startDate: { gte: yearStart, lte: yearEnd },
+    },
+    include: { leaveType: true },
+  });
+
+  return leaveTypes.map((lt) => {
+    const usedDays = approvedRequests
+      .filter((r) => r.leaveTypeId === lt.id)
+      .reduce((sum, r) => sum + Number(r.days), 0);
+    return {
+      leaveTypeId: lt.id,
+      leaveTypeName: lt.name,
+      maxDays: lt.maxDaysPerYear,
+      usedDays,
+      remainingDays: lt.maxDaysPerYear - usedDays,
+    };
+  });
+}
+
+export async function getLeaveCalendar(tenantId: string, month: number, year: number) {
+  const db = (await import('@softcrm/db')).getPrismaClient();
+  const start = new Date(year, month - 1, 1);
+  const end = new Date(year, month, 0, 23, 59, 59);
+
+  return db.leaveRequest.findMany({
+    where: {
+      tenantId,
+      status: 'APPROVED',
+      OR: [
+        { startDate: { gte: start, lte: end } },
+        { endDate: { gte: start, lte: end } },
+        { AND: [{ startDate: { lte: start } }, { endDate: { gte: end } }] },
+      ],
+    },
+    include: { employee: true, leaveType: true },
+    orderBy: { startDate: 'asc' },
+  });
+}

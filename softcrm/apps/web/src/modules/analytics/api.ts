@@ -199,3 +199,65 @@ export function useScorecard(userId: string) {
     enabled: !!userId,
   });
 }
+
+// --- Widget Data hooks (E096) ---
+
+export interface WidgetDataResult {
+  value: number;
+  label: string;
+}
+
+export interface AvailableMetric {
+  module: string;
+  metric: string;
+  label: string;
+  type: string;
+}
+
+export function useWidgetData() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (query: { type: string; module: string; metric: string; period?: string; limit?: number }) =>
+      apiClient<{ data: WidgetDataResult }>('/api/v1/analytics/widgets/data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(query),
+      }),
+  });
+}
+
+export function useAvailableMetrics() {
+  return useQuery({
+    queryKey: [...analyticsKeys.all, 'widget-metrics'],
+    queryFn: () => apiClient<{ data: AvailableMetric[] }>('/api/v1/analytics/widgets/metrics'),
+  });
+}
+
+// --- Revenue Forecast (E098) ---
+
+export interface RevenueForecastResult {
+  historical: number[];
+  slope: number;
+  intercept: number;
+  forecast: number[];
+}
+
+export function useRevenueForecast() {
+  return useQuery({
+    queryKey: [...analyticsKeys.all, 'forecast-revenue'],
+    queryFn: () => apiClient<{ data: RevenueForecastResult }>('/api/v1/analytics/forecast/revenue'),
+  });
+}
+
+// --- NL Query (E099) ---
+
+export function useNlQuery() {
+  return useMutation({
+    mutationFn: (query: string) =>
+      apiClient<{ data: WidgetDataResult | null; message?: string }>('/api/v1/analytics/nl-query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query }),
+      }),
+  });
+}

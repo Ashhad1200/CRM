@@ -297,3 +297,200 @@ hrRouter.get(
     res.json({ data: paySlips });
   }),
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── E056 — Employee termination & Department CRUD ─────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+hrRouter.post(
+  '/employees/:id/terminate',
+  requirePermission({ module: 'hr', entity: 'employee', action: 'update' }),
+  validate({ params: uuidParamSchema }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const id = param(req, 'id');
+    const employee = await svc.terminateEmployee(tenantId, id, req.body);
+    res.json({ data: employee });
+  }),
+);
+
+hrRouter.get(
+  '/departments/:id',
+  requirePermission({ module: 'hr', entity: 'employee', action: 'read' }),
+  validate({ params: uuidParamSchema }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const id = param(req, 'id');
+    const department = await svc.getDepartment(tenantId, id);
+    res.json({ data: department });
+  }),
+);
+
+hrRouter.patch(
+  '/departments/:id',
+  requirePermission({ module: 'hr', entity: 'employee', action: 'update' }),
+  validate({ params: uuidParamSchema }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const id = param(req, 'id');
+    const department = await svc.updateDepartment(tenantId, id, req.body);
+    res.json({ data: department });
+  }),
+);
+
+hrRouter.delete(
+  '/departments/:id',
+  requirePermission({ module: 'hr', entity: 'employee', action: 'delete' }),
+  validate({ params: uuidParamSchema }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const id = param(req, 'id');
+    await svc.deleteDepartment(tenantId, id);
+    res.status(204).end();
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── E057 — Leave Management Enhancement ───────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+hrRouter.get(
+  '/employees/:id/leave-balance',
+  requirePermission({ module: 'hr', entity: 'employee', action: 'read' }),
+  validate({ params: uuidParamSchema }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const id = param(req, 'id');
+    const balance = await svc.getLeaveBalance(tenantId, id);
+    res.json({ data: balance });
+  }),
+);
+
+hrRouter.get(
+  '/leave-calendar',
+  requirePermission({ module: 'hr', entity: 'employee', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const month = Number(req.query.month);
+    const year = Number(req.query.year);
+    const calendar = await svc.getLeaveCalendar(tenantId, month, year);
+    res.json({ data: calendar });
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── E058 — Attendance ─────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+hrRouter.post(
+  '/attendance/check-in',
+  requirePermission({ module: 'hr', entity: 'employee', action: 'create' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const employeeId = req.body.employeeId as string;
+    const { checkIn } = await import('./attendance.service.js');
+    const record = await checkIn(tenantId, employeeId);
+    res.status(201).json({ data: record });
+  }),
+);
+
+hrRouter.post(
+  '/attendance/check-out',
+  requirePermission({ module: 'hr', entity: 'employee', action: 'update' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const employeeId = req.body.employeeId as string;
+    const { checkOut } = await import('./attendance.service.js');
+    const record = await checkOut(tenantId, employeeId);
+    res.json({ data: record });
+  }),
+);
+
+hrRouter.get(
+  '/attendance/timesheet',
+  requirePermission({ module: 'hr', entity: 'employee', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const employeeId = req.query.employeeId as string;
+    const startDate = new Date(req.query.startDate as string);
+    const endDate = new Date(req.query.endDate as string);
+    const { getTimesheet } = await import('./attendance.service.js');
+    const records = await getTimesheet(tenantId, employeeId, startDate, endDate);
+    res.json({ data: records });
+  }),
+);
+
+hrRouter.get(
+  '/attendance/summary',
+  requirePermission({ module: 'hr', entity: 'employee', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const employeeId = req.query.employeeId as string;
+    const month = Number(req.query.month);
+    const year = Number(req.query.year);
+    const { getAttendanceSummary } = await import('./attendance.service.js');
+    const summary = await getAttendanceSummary(tenantId, employeeId, month, year);
+    res.json({ data: summary });
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── E059 — Payroll Engine Enhancement ─────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+hrRouter.post(
+  '/payroll-runs/:id/generate-payslips',
+  requirePermission({ module: 'hr', entity: 'employee', action: 'update' }),
+  validate({ params: uuidParamSchema }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const id = param(req, 'id');
+    const { generatePaySlips } = await import('./payroll/payroll-engine.service.js');
+    const paySlips = await generatePaySlips(tenantId, id);
+    res.json({ data: paySlips });
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── E060 — Pay Slip PDF (HTML stub) ───────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+hrRouter.get(
+  '/payroll-runs/:runId/payslips/:payslipId/pdf',
+  requirePermission({ module: 'hr', entity: 'employee', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const runId = param(req, 'runId');
+    const payslipId = param(req, 'payslipId');
+
+    const db = (await import('@softcrm/db')).getPrismaClient();
+    const paySlip = await db.paySlip.findFirst({
+      where: { id: payslipId, payrollRunId: runId, tenantId },
+      include: { employee: true },
+    });
+    if (!paySlip) {
+      res.status(404).json({ error: 'Pay slip not found' });
+      return;
+    }
+
+    const { generatePaySlipHtml } = await import('./payroll/payslip-pdf.service.js');
+    const html = await generatePaySlipHtml({
+      period: runId,
+      employeeName: `${paySlip.employee.firstName} ${paySlip.employee.lastName}`,
+      employeeNumber: paySlip.employee.employeeNumber,
+      basicSalary: (paySlip.components as any)?.baseSalary ?? 0,
+      allowances: 0,
+      grossPay: paySlip.grossPay,
+      tax: (paySlip.deductions as any)?.tax ?? 0,
+      benefits: (paySlip.deductions as any)?.benefits ?? 0,
+      totalDeductions: Object.values(paySlip.deductions as Record<string, number>).reduce(
+        (a, b) => a + Number(b),
+        0,
+      ),
+      netPay: paySlip.netPay,
+    });
+
+    res.setHeader('Content-Type', 'text/html');
+    res.send(html);
+  }),
+);

@@ -3,7 +3,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../utils/cn.js';
 
 const glassCardVariants = cva(
-  'rounded-xl transition-all',
+  'rounded-xl transition-all reduced-transparency:backdrop-blur-none',
   {
     variants: {
       tier: {

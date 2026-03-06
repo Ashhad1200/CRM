@@ -10,6 +10,10 @@ const TransactionsList = lazy(() => import('./pages/transactions-list'));
 const TransactionDetail = lazy(() => import('./pages/transaction-detail'));
 const TablesPage = lazy(() => import('./pages/tables'));
 const KitchenDisplay = lazy(() => import('./pages/kitchen-display'));
+const TerminalPage = lazy(() => import('./pages/terminal'));
+const RestaurantPage = lazy(() => import('./pages/restaurant'));
+const SessionManagement = lazy(() => import('./pages/session-management'));
+const ReportsPage = lazy(() => import('./pages/reports'));
 
 const tabs: ModuleTab[] = [
   { label: 'Registers', to: 'registers' },
@@ -17,6 +21,10 @@ const tabs: ModuleTab[] = [
   { label: 'Transactions', to: 'transactions' },
   { label: 'Tables', to: 'tables' },
   { label: 'Kitchen', to: 'kitchen' },
+  { label: 'Terminal', to: 'terminal' },
+  { label: 'Restaurant', to: 'restaurant' },
+  { label: 'Session Mgmt', to: 'session-management' },
+  { label: 'Reports', to: 'reports' },
 ];
 
 export function POSRoutes() {
@@ -32,6 +40,10 @@ export function POSRoutes() {
         <Route path="transactions/:id" element={<TransactionDetail />} />
         <Route path="tables" element={<TablesPage />} />
         <Route path="kitchen" element={<KitchenDisplay />} />
+        <Route path="terminal" element={<TerminalPage />} />
+        <Route path="restaurant" element={<RestaurantPage />} />
+        <Route path="session-management" element={<SessionManagement />} />
+        <Route path="reports" element={<ReportsPage />} />
       </Route>
     </Routes>
   );

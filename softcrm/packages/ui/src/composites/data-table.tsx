@@ -80,6 +80,10 @@ export interface DataTableProps<TData> {
   renderExpandedRow?: (row: TData) => React.ReactNode;
   onExport?: (data: TData[]) => void;
   pageSize?: number;
+  /** Enable virtual scrolling for large datasets (renders visible rows only) */
+  virtualRows?: boolean;
+  /** Height of the virtual scroll container in px (default 500) */
+  virtualHeight?: number;
   className?: string;
 }
 
@@ -96,6 +100,8 @@ export function DataTable<TData>({
   renderExpandedRow,
   onExport,
   pageSize = 10,
+  virtualRows = false,
+  virtualHeight = 500,
   className,
 }: DataTableProps<TData>): React.ReactElement {
   const [sorting, setSorting] = React.useState<SortingState>([]);
@@ -140,6 +146,20 @@ export function DataTable<TData>({
       onRowSelectionChange(selectedRows);
     }
   }, [rowSelection, onRowSelectionChange, table]);
+
+  // Virtual scrolling state
+  const ROW_HEIGHT = 40;
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = React.useState(0);
+
+  const allRows = table.getRowModel().rows;
+  const visibleStart = virtualRows ? Math.floor(scrollTop / ROW_HEIGHT) : 0;
+  const visibleCount = virtualRows ? Math.ceil(virtualHeight / ROW_HEIGHT) + 2 : allRows.length;
+  const visibleRows = virtualRows
+    ? allRows.slice(visibleStart, visibleStart + visibleCount)
+    : allRows;
+  const totalHeight = virtualRows ? allRows.length * ROW_HEIGHT : 0;
+  const offsetY = virtualRows ? visibleStart * ROW_HEIGHT : 0;
 
   return (
     <div className={cn('glass-2 rounded-xl space-y-4 p-4', className)}>
@@ -197,30 +217,49 @@ export function DataTable<TData>({
       )}
 
       {/* Table */}
-      <div className="rounded-lg border border-white/15 overflow-hidden">
-        <table className="w-full caption-bottom text-sm">
+      <div
+        ref={scrollContainerRef}
+        className="rounded-lg border border-white/15 overflow-auto"
+        style={virtualRows ? { maxHeight: virtualHeight } : undefined}
+        onScroll={virtualRows ? (e) => setScrollTop((e.target as HTMLDivElement).scrollTop) : undefined}
+      >
+        <table className="w-full caption-bottom text-sm" role="grid" aria-label="Data table">
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id} className="glass-1 border-b border-white/15 transition-colors">
-                {renderExpandedRow && <th className="w-8" />}
-                {headerGroup.headers.map((header) => (
-                  <th
-                    key={header.id}
-                    className="h-10 px-4 text-left align-middle font-medium text-neutral-500 [&:has([role=checkbox])]:pr-0"
-                  >
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
-                  </th>
-                ))}
+              <tr key={headerGroup.id} className="glass-1 border-b border-white/15 transition-colors" role="row">
+                {renderExpandedRow && <th className="w-8" role="columnheader" />}
+                {headerGroup.headers.map((header) => {
+                  const canSort = header.column.getCanSort();
+                  const sorted = header.column.getIsSorted();
+                  return (
+                    <th
+                      key={header.id}
+                      className="h-10 px-4 text-left align-middle font-medium text-neutral-500 [&:has([role=checkbox])]:pr-0"
+                      role="columnheader"
+                      aria-sort={sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : canSort ? 'none' : undefined}
+                      tabIndex={canSort ? 0 : undefined}
+                      onKeyDown={canSort ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); header.column.toggleSorting(); } } : undefined}
+                      style={canSort ? { cursor: 'pointer' } : undefined}
+                    >
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(header.column.columnDef.header, header.getContext())}
+                    </th>
+                  );
+                })}
               </tr>
             ))}
           </thead>
-          <tbody className="[&_tr:last-child]:border-0">
-            {table.getRowModel().rows.length ? (
-              table.getRowModel().rows.map((row) => (
+          <tbody className="[&_tr:last-child]:border-0" role="rowgroup" style={virtualRows ? { height: totalHeight, position: 'relative' } : undefined}>
+            {virtualRows && offsetY > 0 && (
+              <tr style={{ height: offsetY }} aria-hidden="true"><td /></tr>
+            )}
+            {visibleRows.length ? (
+              visibleRows.map((row) => (
                 <React.Fragment key={row.id}>
                   <tr
+                    role="row"
+                    aria-selected={row.getIsSelected() || undefined}
                     data-state={row.getIsSelected() ? 'selected' : undefined}
                     className="border-b border-white/10 transition-colors hover:bg-white/5 data-[state=selected]:bg-brand-50/20"
                   >
@@ -241,7 +280,7 @@ export function DataTable<TData>({
                       </td>
                     )}
                     {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="px-4 py-2.5 align-middle [&:has([role=checkbox])]:pr-0">
+                      <td key={cell.id} role="gridcell" className="px-4 py-2.5 align-middle [&:has([role=checkbox])]:pr-0">
                         {onCellEdit ? (
                           <InlineEditCell
                             value={cell.getValue()}
@@ -268,6 +307,9 @@ export function DataTable<TData>({
                   No results.
                 </td>
               </tr>
+            )}
+            {virtualRows && (totalHeight - offsetY - visibleRows.length * ROW_HEIGHT) > 0 && (
+              <tr style={{ height: totalHeight - offsetY - visibleRows.length * ROW_HEIGHT }} aria-hidden="true"><td /></tr>
             )}
           </tbody>
         </table>

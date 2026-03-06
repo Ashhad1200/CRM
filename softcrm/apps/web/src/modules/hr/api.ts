@@ -728,3 +728,72 @@ export function useUpdateApplicant() {
     },
   });
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Attendance
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+export function useCheckIn() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiClient('/api/v1/hr/attendance/check-in', { method: 'POST' }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['hr', 'attendance'] });
+    },
+  });
+}
+
+export function useCheckOut() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiClient('/api/v1/hr/attendance/check-out', { method: 'POST' }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['hr', 'attendance'] });
+    },
+  });
+}
+
+export function useTimesheet(employeeId: string, startDate: string, endDate: string) {
+  return useQuery({
+    queryKey: ['hr', 'attendance', 'timesheet', employeeId, startDate, endDate],
+    queryFn: () =>
+      apiClient<{ data: any[] }>(
+        `/api/v1/hr/attendance/timesheet?employeeId=${employeeId}&startDate=${startDate}&endDate=${endDate}`,
+      ).then((r) => r.data),
+    enabled: !!employeeId && !!startDate && !!endDate,
+  });
+}
+
+export function useAttendanceSummary(employeeId: string, month: number, year: number) {
+  return useQuery({
+    queryKey: ['hr', 'attendance', 'summary', employeeId, month, year],
+    queryFn: () =>
+      apiClient<{ data: any }>(
+        `/api/v1/hr/attendance/summary?employeeId=${employeeId}&month=${month}&year=${year}`,
+      ).then((r) => r.data),
+    enabled: !!employeeId,
+  });
+}
+
+export function useLeaveBalance(employeeId: string) {
+  return useQuery({
+    queryKey: ['hr', 'leave-balance', employeeId],
+    queryFn: () =>
+      apiClient<{ data: any }>(
+        `/api/v1/hr/employees/${employeeId}/leave-balance`,
+      ).then((r) => r.data),
+    enabled: !!employeeId,
+  });
+}
+
+export function useLeaveCalendar(month: number, year: number) {
+  return useQuery({
+    queryKey: ['hr', 'leave-calendar', month, year],
+    queryFn: () =>
+      apiClient<{ data: any[] }>(
+        `/api/v1/hr/leave-calendar?month=${month}&year=${year}`,
+      ).then((r) => r.data),
+  });
+}

@@ -424,7 +424,28 @@ export async function findLeads(
   const { skip, take, orderBy } = paginationArgs(pagination);
 
   const [data, total] = await db.$transaction([
-    db.lead.findMany({ where, skip, take, orderBy }),
+    db.lead.findMany({
+      where,
+      skip,
+      take,
+      orderBy,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phone: true,
+        company: true,
+        jobTitle: true,
+        source: true,
+        status: true,
+        score: true,
+        assignedOwnerId: true,
+        createdAt: true,
+        updatedAt: true,
+        version: true,
+      },
+    }),
     db.lead.count({ where }),
   ]);
 

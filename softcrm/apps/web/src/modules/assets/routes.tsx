@@ -11,6 +11,7 @@ const AuditsList = lazy(() => import('./pages/audits-list'));
 const AuditDetail = lazy(() => import('./pages/audit-detail'));
 const DisposalsList = lazy(() => import('./pages/disposals-list'));
 const DepreciationReport = lazy(() => import('./pages/depreciation-report'));
+const DepreciationRun = lazy(() => import('./pages/depreciation-run'));
 
 const tabs: ModuleTab[] = [
   { label: 'Assets', to: 'assets' },
@@ -20,6 +21,7 @@ const tabs: ModuleTab[] = [
   { label: 'Audits', to: 'audits' },
   { label: 'Disposals', to: 'disposals' },
   { label: 'Depreciation', to: 'depreciation' },
+  { label: 'Depr. Run', to: 'depreciation-run' },
 ];
 
 export function AssetsRoutes() {
@@ -36,6 +38,7 @@ export function AssetsRoutes() {
         <Route path="audits/:id" element={<AuditDetail />} />
         <Route path="disposals" element={<DisposalsList />} />
         <Route path="depreciation" element={<DepreciationReport />} />
+        <Route path="depreciation-run" element={<DepreciationRun />} />
       </Route>
     </Routes>
   );

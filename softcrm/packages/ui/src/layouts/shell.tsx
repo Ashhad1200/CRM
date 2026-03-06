@@ -32,6 +32,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   return (
     <aside
+      role="navigation"
+      aria-label="Main navigation"
       className={cn(
         'flex h-full flex-col border-r border-white/10 glass-3 backdrop-blur-xl transition-all duration-200',
         collapsed ? 'w-16' : 'w-64',
@@ -63,7 +65,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto p-2">
+      <nav className="flex-1 overflow-y-auto p-2" aria-label="Sidebar">
         <ul className="space-y-1">
           {items.map((item) => (
             <li key={item.id}>
@@ -124,6 +126,7 @@ export const TopNav: React.FC<TopNavProps> = ({
 }) => {
   return (
     <header
+      role="banner"
       className={cn(
         'sticky top-0 z-sticky flex h-14 items-center justify-between border-b border-white/10 glass-2 backdrop-blur-xl px-4',
         className,
@@ -158,7 +161,7 @@ export const Shell: React.FC<ShellProps> = ({ sidebar, topNav, children, classNa
       {sidebar}
       <div className="flex flex-1 flex-col overflow-hidden">
         {topNav}
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+        <main role="main" className="flex-1 overflow-y-auto p-6">{children}</main>
       </div>
     </div>
   );
@@ -176,6 +179,7 @@ export interface MobileNavProps {
 export const MobileNav: React.FC<MobileNavProps> = ({ items, className }) => {
   return (
     <nav
+      aria-label="Mobile navigation"
       className={cn(
         'fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around border-t border-white/10 glass-3 backdrop-blur-xl py-2 pb-[env(safe-area-inset-bottom)] md:hidden',
         className,

@@ -11,13 +11,17 @@ const PayrollRunDetail = lazy(() => import('./pages/payroll-run-detail'));
 const RecruitmentPage = lazy(() => import('./pages/recruitment'));
 const JobPostingDetail = lazy(() => import('./pages/job-posting-detail'));
 const ApplicantDetail = lazy(() => import('./pages/applicant-detail'));
+const AttendancePage = lazy(() => import('./pages/attendance'));
+const OrgChartPage = lazy(() => import('./pages/org-chart'));
 
 const tabs: ModuleTab[] = [
   { label: 'Employees', to: 'employees' },
   { label: 'Departments', to: 'departments' },
+  { label: 'Attendance', to: 'attendance' },
   { label: 'Leave', to: 'leave' },
   { label: 'Payroll', to: 'payroll' },
   { label: 'Recruitment', to: 'recruitment' },
+  { label: 'Org Chart', to: 'org-chart' },
 ];
 
 export function HRRoutes() {
@@ -34,6 +38,8 @@ export function HRRoutes() {
         <Route path="recruitment" element={<RecruitmentPage />} />
         <Route path="recruitment/postings/:id" element={<JobPostingDetail />} />
         <Route path="recruitment/applicants/:id" element={<ApplicantDetail />} />
+        <Route path="attendance" element={<AttendancePage />} />
+        <Route path="org-chart" element={<OrgChartPage />} />
       </Route>
     </Routes>
   );

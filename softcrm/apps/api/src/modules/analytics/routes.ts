@@ -9,11 +9,16 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import type { Request, Response, NextFunction } from 'express';
+import { Redis } from 'ioredis';
+import { getConfig } from '../../config/index.js';
 
 import { validate } from '../../middleware/validate.js';
 import { requirePermission } from '../../middleware/rbac.js';
 
 import * as svc from './service.js';
+import * as widgetsSvc from './widgets.service.js';
+import * as forecastSvc from './forecast.service.js';
+import { parseNaturalQuery } from './nl-query.service.js';
 import {
   createDashboardSchema,
   updateDashboardSchema,
@@ -54,6 +59,34 @@ const uuidParamSchema = z.object({
 const userIdParamSchema = z.object({
   userId: z.string().uuid(),
 });
+
+// ── Redis cache helper ─────────────────────────────────────────────────────────
+
+const CACHE_TTL = 300; // 5 minutes
+let redis: Redis | null = null;
+
+function getRedis(): Redis {
+  if (!redis) {
+    redis = new Redis(getConfig().REDIS_URL, { maxRetriesPerRequest: 1, lazyConnect: true });
+  }
+  return redis;
+}
+
+async function cached<T>(key: string, compute: () => Promise<T>): Promise<T> {
+  try {
+    const raw = await getRedis().get(key);
+    if (raw) return JSON.parse(raw) as T;
+  } catch {
+    // Redis unavailable — fall through to compute
+  }
+  const result = await compute();
+  try {
+    await getRedis().set(key, JSON.stringify(result), 'EX', CACHE_TTL);
+  } catch {
+    // best-effort cache write
+  }
+  return result;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── Router ───────────────────────────────────────────────────────────────────
@@ -153,7 +186,8 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const { tid: tenantId } = req.user!;
     const dashboardId = param(req, 'id');
-    const metrics = await svc.getDashboardMetrics(tenantId, dashboardId);
+    const cacheKey = `analytics:metrics:${tenantId}:${dashboardId}`;
+    const metrics = await cached(cacheKey, () => svc.getDashboardMetrics(tenantId, dashboardId));
     res.json({ data: metrics });
   }),
 );
@@ -225,7 +259,8 @@ router.get(
     const { type, historicalMonths } = req.query as unknown as z.infer<
       typeof forecastQuerySchema
     >;
-    const forecasts = await svc.generateForecast(tenantId, type, historicalMonths);
+    const cacheKey = `analytics:forecast:${tenantId}:${type}:${historicalMonths}`;
+    const forecasts = await cached(cacheKey, () => svc.generateForecast(tenantId, type, historicalMonths));
     res.json({ data: forecasts });
   }),
 );
@@ -255,7 +290,8 @@ router.get(
   requirePermission({ module: 'analytics', action: 'read' }),
   asyncHandler(async (req: Request, res: Response) => {
     const { tid: tenantId } = req.user!;
-    const metrics = await svc.calculatePipelineMetrics(tenantId);
+    const cacheKey = `analytics:pipeline:${tenantId}`;
+    const metrics = await cached(cacheKey, () => svc.calculatePipelineMetrics(tenantId));
     res.json({ data: metrics });
   }),
 );
@@ -273,6 +309,71 @@ router.get(
     const userId = param(req, 'userId');
     const scorecard = await svc.getRepScorecard(tenantId, userId);
     res.json({ data: scorecard });
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── Widget Data API (E096) ───────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post(
+  '/widgets/data',
+  requirePermission({ module: 'analytics', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const body = req.body;
+    const cacheKey = `analytics:widget:${tenantId}:${JSON.stringify(body)}`;
+    const data = await cached(cacheKey, () => widgetsSvc.getWidgetData(tenantId, body));
+    res.json({ data });
+  }),
+);
+
+router.get(
+  '/widgets/metrics',
+  requirePermission({ module: 'analytics', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const cacheKey = 'analytics:widget-metrics';
+    const metrics = await cached(cacheKey, () => widgetsSvc.getAvailableMetrics());
+    res.json({ data: metrics });
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── Revenue Forecast (E098) ──────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get(
+  '/forecast/revenue',
+  requirePermission({ module: 'analytics', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const cacheKey = `analytics:forecast-revenue:${tenantId}`;
+    const forecast = await cached(cacheKey, () => forecastSvc.getRevenueForecast(tenantId));
+    res.json({ data: forecast });
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ── NL Query (E099) ──────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post(
+  '/nl-query',
+  requirePermission({ module: 'analytics', action: 'read' }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { tid: tenantId } = req.user!;
+    const { query } = req.body as { query: string };
+    const parsed = parseNaturalQuery(query ?? '');
+    if (!parsed) {
+      res.json({ data: null, message: 'Could not understand query' });
+      return;
+    }
+    const data = await widgetsSvc.getWidgetData(tenantId, {
+      type: 'kpi',
+      module: parsed.module,
+      metric: parsed.metric,
+    });
+    res.json({ data });
   }),
 );
 
